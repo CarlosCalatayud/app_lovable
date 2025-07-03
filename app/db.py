@@ -372,9 +372,21 @@ def get_all_instalaciones(conn):
 
 
 def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
-    VALID_TABLES = ["inversores", "paneles_solares", "contadores", "baterias", "tipos_vias", "distribuidoras", "categorias_instalador", "usuarios", "promotores", "instaladores", "tipos_finca"] # Añadí tipos_finca
+    # Lista de validación para seguridad
+    VALID_TABLES = ["inversores", "paneles_solares", "contadores", "baterias", "tipos_vias", "distribuidoras", "categorias_instalador", "usuarios", "promotores", "instaladores", "tipos_finca"]
     if table_name not in VALID_TABLES:
-        raise ValueError(f"Tabla no permitida: {table_name}")
+        print(f"!!! INTENTO DE ACCESO A TABLA NO VÁLIDA: {table_name} !!!")
+        # Devolvemos una lista vacía para no romper el frontend
+        return []
+
+    # Usamos la función de ayuda _execute_select que ya maneja errores
+    # y devuelve [] en caso de fallo.
+    sql = f"SELECT {columns} FROM {table_name} ORDER BY {order_by_column}"
+    
+    # La llamada a _execute_select ya es segura.
+    # No necesitamos un try/except aquí.
+    return _execute_select(conn, sql)
+
 # ... (El resto de tus funciones CRUD pueden ser adaptadas usando las funciones de ayuda _execute_*)
 # --- inversores ---
 def add_inversor(conn, data_dict):

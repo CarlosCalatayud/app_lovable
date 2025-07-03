@@ -528,11 +528,11 @@ def get_all_products_by_type(product_type):
         return jsonify({'error': f'Configuración interna errónea para {product_type}'}), 500
     
     conn = get_db_connection()
-    # Ahora estamos seguros de que 'items' será una lista
+    # Con la corrección en db.py, 'items' está garantizado que es una lista.
     items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
     conn.close()
 
-    # El logging ahora es seguro porque 'items' es una lista
+    # Este logging ahora es seguro.
     current_app.logger.info(f"Obtenidos {len(items)} items para el producto tipo '{product_type}'.")
     
     return jsonify(items)
@@ -550,13 +550,14 @@ def get_catalog_data(catalog_name):
         return jsonify({'error': f'Configuración interna errónea para {catalog_name}'}), 500
 
     conn = get_db_connection()
-    # 'items' siempre será una lista
+    # 'items' siempre será una lista.
     items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
     conn.close()
     
     current_app.logger.info(f"Obtenidos {len(items)} items para el catálogo '{catalog_name}'.")
 
     return jsonify(items)
+
 
 
 @bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['GET'])
