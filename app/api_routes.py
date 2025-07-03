@@ -517,40 +517,29 @@ CATALOG_TABLE_MAP = {
 
 @bp_api.route('/productos/<string:product_type>', methods=['GET'])
 def get_all_products_by_type(product_type):
-    if product_type not in PRODUCT_TABLE_MAP:
-        current_app.logger.error(f"PRODUCT_TABLE_MAP no contiene la clave: {product_type}")
-        return jsonify({'error': f'Tipo de producto no válido en map: {product_type}'}), 404
-    
-    config = PRODUCT_TABLE_MAP[product_type]
-    table_name = config.get("table")
-    order_by = config.get("order_by", "id")
-
-    if not table_name:
-        current_app.logger.error(f"Configuración para product_type '{product_type}' no tiene 'table'.")
-        return jsonify({'error': f'Configuración interna errónea para {product_type}'}), 500
-    
+    # ... (código de configuración) ...
     conn = None
     try:
-        # --- LOGGING AQUÍ ---
+        conn = get_db_connection()
+        items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
+        
+        # --- LOGGING MOVIDO AQUÍ DENTRO ---
         current_app.logger.info(f"Obtenidos {len(items)} items para el producto tipo '{product_type}'.")
         if items:
             current_app.logger.info(f"Datos: {items}")
-        # --------------------
-        conn = get_db_connection()
-        items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
+        # ------------------------------------
+        
+        return jsonify(items) # Devuelve el resultado desde aquí
+
     except ValueError as ve:
         current_app.logger.error(f"Error de valor en get_all_products_by_type para {product_type}: {ve}", exc_info=True)
-        if conn: conn.close() # Asegurar cierre de conexión en caso de error temprano
         return jsonify({'error': str(ve)}), 400
     except Exception as e:
         current_app.logger.error(f"Error en API get_all_products_by_type para {product_type}: {e}", exc_info=True)
-        if conn: conn.close()
         return jsonify({'error': f'Error interno al obtener {product_type}'}), 500
     finally:
         if conn: 
             conn.close()
-
-    return jsonify(items)
 
 
 @bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['GET'])
