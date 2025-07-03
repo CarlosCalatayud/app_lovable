@@ -223,13 +223,14 @@ def _execute_update_delete(conn, sql, params):
     sql = sql.replace('?', placeholder)
     
     try:
-        with conn.cursor() as cursor:
-            cursor.execute(sql, params)
-            rowcount = cursor.rowcount
-            conn.commit()
-            if rowcount == 0:
-                return False, "Elemento no encontrado o los datos no cambiaron."
-            return True, "Operación completada exitosamente."
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        rowcount = cursor.rowcount
+        # conn.commit() # <--- HEMOS QUITADO EL COMMIT DE AQUÍ
+        cursor.close()
+        if rowcount == 0:
+            return False, "Elemento no encontrado o los datos no cambiaron."
+        return True, "Operación preparada para commit."
     except (psycopg2.IntegrityError, sqlite3.IntegrityError) as e:
         conn.rollback()
         return False, f"Error de integridad: Viola una restricción. ({e})"

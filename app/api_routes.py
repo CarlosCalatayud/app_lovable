@@ -286,27 +286,37 @@ def generate_selected_docs_api(instalacion_id):
 
 # --- Endpoints para Usuarios (completando) ---
 @bp_api.route('/usuarios', methods=['POST']) # <--- ¡ASEGÚRATE QUE 'POST' ESTÁ AQUÍ!
-def create_usuario_api(): # Renombrado para evitar conflictos
+@bp_api.route('/usuarios', methods=['POST'])
+def create_usuario_api():
     data = request.json
-    conn = get_db_connection()
+    if not data or not data.get('nombre') or not data.get('dni'):
+        return jsonify({'error': 'Faltan campos obligatorios: nombre y dni'}), 400
+
+    conn = None
     try:
-        # Asume que add_usuario devuelve (id/None, mensaje)
+        conn = get_db_connection()
         new_id, message = database.add_usuario(conn,
                                             data.get('nombre'),
                                             data.get('apellidos'),
                                             data.get('dni'),
                                             data.get('direccion'))
-        if new_id:
+        
+        if new_id is not None:
+            conn.commit()
+            current_app.logger.info(f"Usuario creado con ID: {new_id}. COMMIT realizado.")
             return jsonify({'id': new_id, 'message': message}), 201
         else:
-            # DNI duplicado u otro error de BD
-            return jsonify({'error': message or 'Error al crear usuario'}), 400 # o 409 para conflicto
+            conn.rollback()
+            current_app.logger.error(f"Error al crear usuario, haciendo ROLLBACK. Mensaje: {message}")
+            error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
+            return jsonify({'error': message}), error_code
+
     except Exception as e:
-        current_app.logger.error(f"Error en create_usuario_api: {e}")
+        if conn: conn.rollback()
+        current_app.logger.error(f"Excepción en create_usuario_api: {e}", exc_info=True)
         return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
 
 
 @bp_api.route('/usuarios', methods=['GET'])
@@ -330,19 +340,28 @@ def get_usuario(user_id):
     return jsonify({'error': 'Usuario no encontrado'}), 404
 
 @bp_api.route('/usuarios/<int:user_id>', methods=['PUT'])
-def update_usuario_api(user_id): # Renombrado para evitar conflicto de nombres
+def update_usuario_api(user_id):
     data = request.json
-    conn = get_db_connection()
-    # Asume que los campos son: nombre, apellidos, dni, direccion
-    success, message = database.update_usuario(conn, user_id,
+    conn = None
+    try:
+        conn = get_db_connection()
+        success, message = database.update_usuario(conn, user_id,
                                    data.get('nombre'), data.get('apellidos'),
                                    data.get('dni'), data.get('direccion'))
-    conn.close()
-    if success is True: # Si update_usuario devuelve solo booleano
-        return jsonify({'message': 'Usuario actualizado'}), 200
-    elif success is False and message: # Si devuelve (False, "mensaje de error")
-         return jsonify({'error': message}), 400 # O 409 para conflicto (DNI duplicado)
-    return jsonify({'error': 'Error al actualizar usuario'}), 500
+        if success:
+            conn.commit()
+            current_app.logger.info(f"Usuario ID {user_id} actualizado. COMMIT realizado.")
+            return jsonify({'message': 'Usuario actualizado'}), 200
+        else:
+            conn.rollback()
+            current_app.logger.warning(f"Fallo al actualizar usuario ID {user_id}: {message}")
+            return jsonify({'error': message}), 400
+    except Exception as e:
+        if conn: conn.rollback()
+        current_app.logger.error(f"Excepción al actualizar usuario ID {user_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn: conn.close()
 
 
 @bp_api.route('/usuarios/<int:user_id>', methods=['DELETE'])
@@ -359,36 +378,34 @@ def delete_usuario_api(user_id): # Renombrado
 @bp_api.route('/promotores', methods=['POST'])
 def create_promotor():
     data = request.json
-    # Validación básica de datos
     if not data or not data.get('nombre_razon_social') or not data.get('dni_cif'):
         return jsonify({'error': 'Faltan campos obligatorios: nombre_razon_social y dni_cif'}), 400
 
-    conn = get_db_connection()
+    conn = None
     try:
-        # La función add_promotor ahora devuelve (id, mensaje) o (None, mensaje_error)
+        conn = get_db_connection()
         new_id, message = database.add_promotor(conn,
                                             data.get('nombre_razon_social'),
                                             data.get('apellidos'),
                                             data.get('direccion_fiscal'),
                                             data.get('dni_cif'))
         
-        # Si new_id no es None, la inserción fue exitosa
         if new_id is not None:
-            current_app.logger.info(f"Promotor creado con ID: {new_id}")
+            conn.commit()
+            current_app.logger.info(f"Promotor creado con ID: {new_id}. COMMIT realizado.")
             return jsonify({'id': new_id, 'message': message}), 201
         else:
-            # Si new_id es None, hubo un error que la capa de BD ya capturó
-            current_app.logger.error(f"Error al crear promotor. Mensaje de BD: {message}")
-            # Devolvemos un error 400 (Bad Request) o 409 (Conflict) si es DNI duplicado
-            error_code = 409 if "UNIQUE constraint" in str(message) or "ya existe" in str(message) else 400
+            conn.rollback()
+            current_app.logger.error(f"Error al crear promotor, haciendo ROLLBACK. Mensaje: {message}")
+            error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
             return jsonify({'error': message}), error_code
 
     except Exception as e:
-        current_app.logger.error(f"Excepción no controlada en create_promotor: {e}", exc_info=True)
+        if conn: conn.rollback()
+        current_app.logger.error(f"Excepción en create_promotor: {e}", exc_info=True)
         return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
 
 @bp_api.route('/promotores', methods=['GET'])
 def get_promotores():
@@ -409,18 +426,31 @@ def get_promotor(promotor_id):
 @bp_api.route('/promotores/<int:promotor_id>', methods=['PUT'])
 def update_promotor_api(promotor_id):
     data = request.json
-    conn = get_db_connection()
-    success, message = database.update_promotor(conn, promotor_id,
-                                    data.get('nombre_razon_social'),
-                                    data.get('apellidos'),
-                                    data.get('direccion_fiscal'),
-                                    data.get('dni_cif'))
-    conn.close()
-    if success is True:
-        return jsonify({'message': 'Promotor actualizado'}), 200
-    elif success is False and message:
-        return jsonify({'error': message}), 400
-    return jsonify({'error': 'Error al actualizar promotor'}), 500
+    conn = None
+    try:
+        conn = get_db_connection()
+        success, message = database.update_promotor(conn, promotor_id,
+                                        data.get('nombre_razon_social'),
+                                        data.get('apellidos'),
+                                        data.get('direccion_fiscal'),
+                                        data.get('dni_cif'))
+        
+        if success:
+            conn.commit()
+            current_app.logger.info(f"Promotor ID {promotor_id} actualizado. COMMIT realizado.")
+            return jsonify({'message': 'Promotor actualizado'}), 200
+        else:
+            conn.rollback()
+            current_app.logger.warning(f"Fallo al actualizar promotor ID {promotor_id}: {message}")
+            error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
+            return jsonify({'error': message}), error_code
+
+    except Exception as e:
+        if conn: conn.rollback()
+        current_app.logger.error(f"Excepción al actualizar promotor ID {promotor_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn: conn.close()
 
 @bp_api.route('/promotores/<int:promotor_id>', methods=['DELETE'])
 def delete_promotor_api(promotor_id):
@@ -496,19 +526,32 @@ def get_instalador(instalador_id):
 @bp_api.route('/instaladores/<int:instalador_id>', methods=['PUT'])
 def update_instalador_api(instalador_id):
     data = request.json
-    conn = get_db_connection()
-    success, message = database.update_instalador(conn, instalador_id,
-                                        data.get('nombre_empresa'),
-                                        data.get('direccion_empresa'),
-                                        data.get('cif_empresa'),
-                                        data.get('nombre_tecnico'),
-                                        data.get('competencia_tecnico'))
-    conn.close()
-    if success is True:
-        return jsonify({'message': 'Instalador actualizado'}), 200
-    elif success is False and message:
-        return jsonify({'error': message}), 400
-    return jsonify({'error': 'Error al actualizar instalador'}), 500
+    conn = None
+    try:
+        conn = get_db_connection()
+        success, message = database.update_instalador(conn, instalador_id,
+                                            data.get('nombre_empresa'),
+                                            data.get('direccion_empresa'),
+                                            data.get('cif_empresa'),
+                                            data.get('nombre_tecnico'),
+                                            data.get('competencia_tecnico'))
+        
+        if success:
+            conn.commit()
+            current_app.logger.info(f"Instalador ID {instalador_id} actualizado. COMMIT realizado.")
+            return jsonify({'message': 'Instalador actualizado'}), 200
+        else:
+            conn.rollback()
+            current_app.logger.warning(f"Fallo al actualizar instalador ID {instalador_id}: {message}")
+            error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
+            return jsonify({'error': message}), error_code
+
+    except Exception as e:
+        if conn: conn.rollback()
+        current_app.logger.error(f"Excepción al actualizar instalador ID {instalador_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn: conn.close()
 
 @bp_api.route('/instaladores/<int:instalador_id>', methods=['DELETE'])
 def delete_instalador_api(instalador_id):
@@ -597,54 +640,61 @@ def get_product_by_id(product_type, item_id):
 @bp_api.route('/productos/<string:product_type>', methods=['POST'])
 def create_product(product_type):
     if product_type not in PRODUCT_TABLE_MAP or "add_func" not in PRODUCT_TABLE_MAP[product_type]:
-        return jsonify({'error': 'Creación no soportada para este tipo de producto o tipo no válido'}), 400
+        return jsonify({'error': 'Creación no soportada para este tipo de producto'}), 400
     
     data = request.json
-    conn = get_db_connection()
-    add_function = PRODUCT_TABLE_MAP[product_type]["add_func"]
-    result = add_function(conn, data) # add_func puede devolver ID o (None, "mensaje")
-    conn.close()
+    conn = None
+    try:
+        conn = get_db_connection()
+        add_function = PRODUCT_TABLE_MAP[product_type]["add_func"]
+        new_id, message = add_function(conn, data)
 
-    item_id = None
-    error_message = "Error al crear producto."
+        if new_id is not None:
+            conn.commit()
+            current_app.logger.info(f"Producto de tipo '{product_type}' creado con ID: {new_id}. COMMIT realizado.")
+            return jsonify({'id': new_id, 'message': message}), 201
+        else:
+            conn.rollback()
+            current_app.logger.error(f"Error al crear producto tipo '{product_type}', haciendo ROLLBACK. Mensaje: {message}")
+            error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
+            return jsonify({'error': message}), error_code
 
-    if isinstance(result, tuple) and result[0] is None: # (None, "mensaje de error")
-        item_id = None
-        error_message = result[1]
-    elif isinstance(result, int): # ID devuelto
-        item_id = result
-    # else: caso no esperado
-
-    if item_id:
-        return jsonify({'id': item_id, 'message': f'{product_type[:-1].capitalize()} creado'}), 201
-    return jsonify({'error': error_message}), 400
+    except Exception as e:
+        if conn: conn.rollback()
+        current_app.logger.error(f"Excepción en create_product para '{product_type}': {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn: conn.close()
 
 
 @bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['PUT'])
 def update_product(product_type, item_id):
     if product_type not in PRODUCT_TABLE_MAP or "update_func" not in PRODUCT_TABLE_MAP[product_type]:
-        return jsonify({'error': 'Actualización no soportada para este tipo de producto o tipo no válido'}), 400
+        return jsonify({'error': 'Actualización no soportada para este tipo de producto'}), 400
 
     data = request.json
-    conn = get_db_connection()
-    update_function = PRODUCT_TABLE_MAP[product_type]["update_func"]
-    result = update_function(conn, item_id, data) # update_func puede devolver bool o (False, "mensaje")
-    conn.close()
+    conn = None
+    try:
+        conn = get_db_connection()
+        update_function = PRODUCT_TABLE_MAP[product_type]["update_func"]
+        success, message = update_function(conn, item_id, data)
 
-    success = False
-    message = "Error al actualizar producto."
+        if success:
+            conn.commit()
+            current_app.logger.info(f"Producto tipo '{product_type}' con ID {item_id} actualizado. COMMIT realizado.")
+            return jsonify({'message': f'{product_type[:-1].capitalize()} actualizado'}), 200
+        else:
+            conn.rollback()
+            current_app.logger.warning(f"Fallo al actualizar producto tipo '{product_type}' ID {item_id}: {message}")
+            error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
+            return jsonify({'error': message}), error_code
 
-    if isinstance(result, tuple) and result[0] is False: # (False, "mensaje de error")
-        success = False
-        message = result[1]
-    elif isinstance(result, bool) and result is True: # True devuelto
-        success = True
-        message = f'{product_type[:-1].capitalize()} actualizado'
-    # else: caso no esperado
-
-    if success:
-        return jsonify({'message': message}), 200
-    return jsonify({'error': message}), 400
+    except Exception as e:
+        if conn: conn.rollback()
+        current_app.logger.error(f"Excepción en update_product para '{product_type}' ID {item_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn: conn.close()
 
 
 @bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['DELETE'])
