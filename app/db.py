@@ -57,21 +57,21 @@ def create_tables():
     db_type = 'postgres' if is_postgres(conn) else 'sqlite'
     
     tables_sql = [
-        '''CREATE TABLE IF NOT EXISTS Usuarios (
+        '''CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL,
             apellidos TEXT NOT NULL,
             dni TEXT UNIQUE NOT NULL,
             direccion TEXT
         )''',
-        '''CREATE TABLE IF NOT EXISTS Promotores (
+        '''CREATE TABLE IF NOT EXISTS promotores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_razon_social TEXT NOT NULL,
             apellidos TEXT,
             direccion_fiscal TEXT NOT NULL,
             dni_cif TEXT UNIQUE NOT NULL
         )''',
-        '''CREATE TABLE IF NOT EXISTS Instaladores (
+        '''CREATE TABLE IF NOT EXISTS instaladores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_empresa TEXT NOT NULL,
             direccion_empresa TEXT NOT NULL,
@@ -80,16 +80,16 @@ def create_tables():
             competencia_tecnico TEXT
         )''',
         # Para PostgreSQL, el tipo JSONB es más eficiente que TEXT para JSON.
-        f'''CREATE TABLE IF NOT EXISTS Instalaciones (
+        f'''CREATE TABLE IF NOT EXISTS instalaciones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             descripcion TEXT,
-            usuario_id INTEGER REFERENCES Usuarios(id) ON DELETE SET NULL,
-            promotor_id INTEGER REFERENCES Promotores(id) ON DELETE SET NULL,
-            instalador_id INTEGER REFERENCES Instaladores(id) ON DELETE SET NULL,
+            usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            promotor_id INTEGER REFERENCES promotores(id) ON DELETE SET NULL,
+            instalador_id INTEGER REFERENCES instaladores(id) ON DELETE SET NULL,
             datos_tecnicos_json {'JSONB' if db_type == 'postgres' else 'TEXT'}
         )''',
-        '''CREATE TABLE IF NOT EXISTS Inversores (
+        '''CREATE TABLE IF NOT EXISTS inversores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_inversor TEXT NOT NULL UNIQUE,
             potencia_salida_va INTEGER,
@@ -105,7 +105,7 @@ def create_tables():
             corriente_maxima_salida_a REAL,
             magnetotermico_a INTEGER
         )''',
-        '''CREATE TABLE IF NOT EXISTS PanelesSolares (
+        '''CREATE TABLE IF NOT EXISTS paneles_solares (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_panel TEXT NOT NULL UNIQUE,
             potencia_pico_w INTEGER,
@@ -122,12 +122,12 @@ def create_tables():
             fusible_cc_recomendada_a INTEGER
         )''',
         # Catálogos
-        '''CREATE TABLE IF NOT EXISTS Contadores (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_contador TEXT NOT NULL UNIQUE)''',
-        '''CREATE TABLE IF NOT EXISTS Baterias (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_bateria TEXT NOT NULL UNIQUE, capacidad_kwh REAL)''',
-        '''CREATE TABLE IF NOT EXISTS TiposVias (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_tipo_via TEXT NOT NULL UNIQUE)''',
-        '''CREATE TABLE IF NOT EXISTS Distribuidoras (id INTEGER PRIMARY KEY AUTOINCREMENT, codigo_distribuidora TEXT, nombre_distribuidora TEXT NOT NULL UNIQUE)''',
-        '''CREATE TABLE IF NOT EXISTS CategoriasInstalador (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_categoria TEXT NOT NULL UNIQUE)''',
-        '''CREATE TABLE IF NOT EXISTS TiposFinca (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_tipo_finca TEXT NOT NULL UNIQUE)'''
+        '''CREATE TABLE IF NOT EXISTS contadores (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_contador TEXT NOT NULL UNIQUE)''',
+        '''CREATE TABLE IF NOT EXISTS baterias (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_bateria TEXT NOT NULL UNIQUE, capacidad_kwh REAL)''',
+        '''CREATE TABLE IF NOT EXISTS tipos_vias (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_tipo_via TEXT NOT NULL UNIQUE)''',
+        '''CREATE TABLE IF NOT EXISTS distribuidoras (id INTEGER PRIMARY KEY AUTOINCREMENT, codigo_distribuidora TEXT, nombre_distribuidora TEXT NOT NULL UNIQUE)''',
+        '''CREATE TABLE IF NOT EXISTS categorias_instalador (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_categoria TEXT NOT NULL UNIQUE)''',
+        '''CREATE TABLE IF NOT EXISTS tipos_finca (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre_tipo_finca TEXT NOT NULL UNIQUE)'''
     ]
 
     try:
@@ -157,20 +157,20 @@ def populate_initial_data():
         with conn.cursor() as cursor:
             # Diccionario de datos para poblar
             all_data = {
-                "Inversores": {
-                    "sql": f"INSERT INTO Inversores (nombre_inversor, potencia_salida_va, largo_inversor_mm, ancho_inversor_mm, profundo_inversor_mm, peso_inversor_kg, proteccion_ip_inversor, potencia_max_paneles_w, tension_max_entrada_v, secciones_ca_recomendado_mm2, monofasico_trifasico, corriente_maxima_salida_a, magnetotermico_a) VALUES ({', '.join([placeholder]*13)}) {conflict_clause}",
+                "inversores": {
+                    "sql": f"INSERT INTO inversores (nombre_inversor, potencia_salida_va, largo_inversor_mm, ancho_inversor_mm, profundo_inversor_mm, peso_inversor_kg, proteccion_ip_inversor, potencia_max_paneles_w, tension_max_entrada_v, secciones_ca_recomendado_mm2, monofasico_trifasico, corriente_maxima_salida_a, magnetotermico_a) VALUES ({', '.join([placeholder]*13)}) {conflict_clause}",
                     "data": [('Huawei SUN2000-2KTL-L1', 2000, 365, 365, 156, 12, 'IP65', 3000, 600, 2.5, 'Monofásico', 8.695652174, 10), ('Huawei SUN2000-3KTL-L1', 3000, 365, 365, 156, 12, 'IP65', 4500, 600, 4, 'Monofásico', 13.04347826, 16)] # ... Añade el resto
                 },
-                "PanelesSolares": {
-                    "sql": f"INSERT INTO PanelesSolares (nombre_panel, potencia_pico_w, largo_mm, ancho_mm, profundidad_mm, peso_kg, eficiencia_panel_porcentaje, tension_circuito_abierto_voc, tecnologia_panel_solar, numero_celdas_panel, tension_maximo_funcionamiento_v, corriente_maxima_funcionamiento_a, fusible_cc_recomendada_a) VALUES ({', '.join([placeholder]*13)}) {conflict_clause}",
+                "paneles_solares": {
+                    "sql": f"INSERT INTO paneles_solares (nombre_panel, potencia_pico_w, largo_mm, ancho_mm, profundidad_mm, peso_kg, eficiencia_panel_porcentaje, tension_circuito_abierto_voc, tecnologia_panel_solar, numero_celdas_panel, tension_maximo_funcionamiento_v, corriente_maxima_funcionamiento_a, fusible_cc_recomendada_a) VALUES ({', '.join([placeholder]*13)}) {conflict_clause}",
                     "data": [('Jinergy 450Wp', 450, 2094, 1038, 35, 23.3, 22.0, 49.90, 'Monocristalino', 144, 41.35, 10.89, 16), ('Jinergy 550Wp', 550, 2278, 1134, 35, 27.2, 21.29, 49.97, 'Monocristalino', 144, 41.98, 13.12, 16)] # ... Añade el resto
                 },
-                "Contadores": {"sql": f"INSERT INTO Contadores (nombre_contador) VALUES ({placeholder}) {conflict_clause}", "data": [('DDSU666-H',), ('DDSU666',), ('DTSU666-H',), ('DTSU666',)]},
-                "Baterias": {"sql": f"INSERT INTO Baterias (nombre_bateria, capacidad_kwh) VALUES ({placeholder}, {placeholder}) {conflict_clause}", "data": [('No hay almacenamiento', 0), ('Pylontech UP2500', 2.84)]}, # ... Añade el resto
-                "TiposVias": {"sql": f"INSERT INTO TiposVias (nombre_tipo_via) VALUES ({placeholder}) {conflict_clause}", "data": [('CALLE',), ('AVENIDA',), ('PLAZA',)]}, # ... Añade el resto
-                "Distribuidoras": {"sql": f"INSERT INTO Distribuidoras (codigo_distribuidora, nombre_distribuidora) VALUES ({placeholder}, {placeholder}) {conflict_clause}", "data": [('0021', 'I-DE REDES ELÉCTRICAS INTELIGENTES'), ('0022', 'LFD DISTRIBUCIÓN ELECTRICIDAD')]}, # ... Añade el resto
-                "CategoriasInstalador": {"sql": f"INSERT INTO CategoriasInstalador (nombre_categoria) VALUES ({placeholder}) {conflict_clause}", "data": [('Básica',), ('Especialista',)]},
-                "TiposFinca": {"sql": f"INSERT INTO TiposFinca (nombre_tipo_finca) VALUES ({placeholder}) {conflict_clause}", "data": [('Vivienda unifamiliar',), ('Nave industrial',)]} # ... Añade el resto
+                "contadores": {"sql": f"INSERT INTO contadores (nombre_contador) VALUES ({placeholder}) {conflict_clause}", "data": [('DDSU666-H',), ('DDSU666',), ('DTSU666-H',), ('DTSU666',)]},
+                "baterias": {"sql": f"INSERT INTO baterias (nombre_bateria, capacidad_kwh) VALUES ({placeholder}, {placeholder}) {conflict_clause}", "data": [('No hay almacenamiento', 0), ('Pylontech UP2500', 2.84)]}, # ... Añade el resto
+                "tipos_vias": {"sql": f"INSERT INTO tipos_vias (nombre_tipo_via) VALUES ({placeholder}) {conflict_clause}", "data": [('CALLE',), ('AVENIDA',), ('PLAZA',)]}, # ... Añade el resto
+                "distribuidoras": {"sql": f"INSERT INTO distribuidoras (codigo_distribuidora, nombre_distribuidora) VALUES ({placeholder}, {placeholder}) {conflict_clause}", "data": [('0021', 'I-DE REDES ELÉCTRICAS INTELIGENTES'), ('0022', 'LFD DISTRIBUCIÓN ELECTRICIDAD')]}, # ... Añade el resto
+                "categorias_instalador": {"sql": f"INSERT INTO categorias_instalador (nombre_categoria) VALUES ({placeholder}) {conflict_clause}", "data": [('Básica',), ('Especialista',)]},
+                "tipos_finca": {"sql": f"INSERT INTO tipos_finca (nombre_tipo_finca) VALUES ({placeholder}) {conflict_clause}", "data": [('Vivienda unifamiliar',), ('Nave industrial',)]} # ... Añade el resto
             }
             
             for table_name, info in all_data.items():
@@ -254,62 +254,62 @@ def _execute_select(conn, sql, params=None, one=False):
         print(f"Error en SELECT: {e}")
         return None if one else []
 
-# --- Usuarios ---
+# --- usuarios ---
 def add_usuario(conn, nombre, apellidos, dni, direccion):
-    sql = "INSERT INTO Usuarios (nombre, apellidos, dni, direccion) VALUES (?, ?, ?, ?)"
+    sql = "INSERT INTO usuarios (nombre, apellidos, dni, direccion) VALUES (?, ?, ?, ?)"
     return _execute_insert(conn, sql, (nombre, apellidos, dni, direccion))
 
 def get_all_usuarios(conn):
-    return _execute_select(conn, "SELECT * FROM Usuarios ORDER BY nombre, apellidos")
+    return _execute_select(conn, "SELECT * FROM usuarios ORDER BY nombre, apellidos")
 
 def update_usuario(conn, usuario_id, nombre, apellidos, dni, direccion):
-    sql = "UPDATE Usuarios SET nombre = ?, apellidos = ?, dni = ?, direccion = ? WHERE id = ?"
+    sql = "UPDATE usuarios SET nombre = ?, apellidos = ?, dni = ?, direccion = ? WHERE id = ?"
     return _execute_update_delete(conn, sql, (nombre, apellidos, dni, direccion, usuario_id))
 
 def delete_usuario(conn, usuario_id):
     # Primero, comprobar dependencias
-    count = _execute_select(conn, "SELECT COUNT(*) as c FROM Instalaciones WHERE usuario_id = ?", (usuario_id,), one=True)
+    count = _execute_select(conn, "SELECT COUNT(*) as c FROM instalaciones WHERE usuario_id = ?", (usuario_id,), one=True)
     if count and count['c'] > 0:
         return False, "El usuario está asignado a una o más instalaciones y no puede ser eliminado."
-    return _execute_update_delete(conn, "DELETE FROM Usuarios WHERE id = ?", (usuario_id,))
+    return _execute_update_delete(conn, "DELETE FROM usuarios WHERE id = ?", (usuario_id,))
 
-# ... (Repite el patrón para Promotores, Instaladores, etc.) ...
-# --- Promotores ---
+# ... (Repite el patrón para promotores, instaladores, etc.) ...
+# --- promotores ---
 def add_promotor(conn, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
-    sql = "INSERT INTO Promotores (nombre_razon_social, apellidos, direccion_fiscal, dni_cif) VALUES (?, ?, ?, ?)"
+    sql = "INSERT INTO promotores (nombre_razon_social, apellidos, direccion_fiscal, dni_cif) VALUES (?, ?, ?, ?)"
     return _execute_insert(conn, sql, (nombre_razon_social, apellidos, direccion_fiscal, dni_cif))
 def get_all_promotores(conn):
-    return _execute_select(conn, "SELECT * FROM Promotores ORDER BY nombre_razon_social, apellidos")
+    return _execute_select(conn, "SELECT * FROM promotores ORDER BY nombre_razon_social, apellidos")
 def update_promotor(conn, promotor_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
-    sql = "UPDATE Promotores SET nombre_razon_social = ?, apellidos = ?, direccion_fiscal = ?, dni_cif = ? WHERE id = ?"
+    sql = "UPDATE promotores SET nombre_razon_social = ?, apellidos = ?, direccion_fiscal = ?, dni_cif = ? WHERE id = ?"
     return _execute_update_delete(conn, sql, (nombre_razon_social, apellidos, direccion_fiscal, dni_cif, promotor_id))
 def delete_promotor(conn, promotor_id):
     # Primero, comprobar dependencias
-    count = _execute_select(conn, "SELECT COUNT(*) as c FROM Instalaciones WHERE promotor_id = ?", (promotor_id,), one=True)
+    count = _execute_select(conn, "SELECT COUNT(*) as c FROM instalaciones WHERE promotor_id = ?", (promotor_id,), one=True)
     if count and count['c'] > 0:
         return False, "El promotor está asignado a una o más instalaciones y no puede ser eliminado."
-    return _execute_update_delete(conn, "DELETE FROM Promotores WHERE id = ?", (promotor_id,))
+    return _execute_update_delete(conn, "DELETE FROM promotores WHERE id = ?", (promotor_id,))
 
-# --- Instaladores ---
+# --- instaladores ---
 def add_instalador(conn, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico):
-    sql = "INSERT INTO Instaladores (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico) VALUES (?, ?, ?, ?, ?)"
+    sql = "INSERT INTO instaladores (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico) VALUES (?, ?, ?, ?, ?)"
     return _execute_insert(conn, sql, (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico))
 def get_all_instaladores(conn):
-    return _execute_select(conn, "SELECT * FROM Instaladores ORDER BY nombre_empresa")
+    return _execute_select(conn, "SELECT * FROM instaladores ORDER BY nombre_empresa")
 def update_instalador(conn, instalador_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico):
-    sql = "UPDATE Instaladores SET nombre_empresa = ?, direccion_empresa = ?, cif_empresa = ?, nombre_tecnico = ?, competencia_tecnico = ? WHERE id = ?"
+    sql = "UPDATE instaladores SET nombre_empresa = ?, direccion_empresa = ?, cif_empresa = ?, nombre_tecnico = ?, competencia_tecnico = ? WHERE id = ?"
     return _execute_update_delete(conn, sql, (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico, instalador_id))
 def delete_instalador(conn, instalador_id):
     # Primero, comprobar dependencias
-    count = _execute_select(conn, "SELECT COUNT(*) as c FROM Instalaciones WHERE instalador_id = ?", (instalador_id,), one=True)
+    count = _execute_select(conn, "SELECT COUNT(*) as c FROM instalaciones WHERE instalador_id = ?", (instalador_id,), one=True)
     if count and count['c'] > 0:
         return False, "El instalador está asignado a una o más instalaciones y no puede ser eliminado."
-    return _execute_update_delete(conn, "DELETE FROM Instaladores WHERE id = ?", (instalador_id,))
+    return _execute_update_delete(conn, "DELETE FROM instaladores WHERE id = ?", (instalador_id,))
 
-# --- Instalaciones ---
+# --- instalaciones ---
 def add_instalacion(conn, descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_dict):
     datos_tecnicos_str = json.dumps(datos_tecnicos_dict)
-    sql = "INSERT INTO Instalaciones (descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_json) VALUES (?, ?, ?, ?, ?)"
+    sql = "INSERT INTO instalaciones (descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_json) VALUES (?, ?, ?, ?, ?)"
     return _execute_insert(conn, sql, (descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_str))
 
 def get_instalacion_completa(conn, instalacion_id):
@@ -320,10 +320,10 @@ def get_instalacion_completa(conn, instalacion_id):
         I.promotor_id, P.nombre_razon_social as promotor_nombre, P.apellidos as promotor_apellidos, P.direccion_fiscal as promotor_direccion, P.dni_cif as promotor_cif,
         I.instalador_id, INS.nombre_empresa as instalador_empresa, INS.direccion_empresa as instalador_direccion, INS.cif_empresa as instalador_cif,
         INS.nombre_tecnico as instalador_tecnico_nombre, INS.competencia_tecnico as instalador_tecnico_competencia
-    FROM Instalaciones I
-    LEFT JOIN Usuarios U ON I.usuario_id = U.id
-    LEFT JOIN Promotores P ON I.promotor_id = P.id
-    LEFT JOIN Instaladores INS ON I.instalador_id = INS.id
+    FROM instalaciones I
+    LEFT JOIN usuarios U ON I.usuario_id = U.id
+    LEFT JOIN promotores P ON I.promotor_id = P.id
+    LEFT JOIN instaladores INS ON I.instalador_id = INS.id
     WHERE I.id = ?
     """
     data = _execute_select(conn, sql, (instalacion_id,), one=True)
@@ -345,7 +345,7 @@ def get_instalacion_completa(conn, instalacion_id):
 def update_instalacion(conn, instalacion_id, descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_dict):
     datos_tecnicos_str = json.dumps(datos_tecnicos_dict)
     sql = """
-        UPDATE Instalaciones SET descripcion = ?, usuario_id = ?, promotor_id = ?,
+        UPDATE instalaciones SET descripcion = ?, usuario_id = ?, promotor_id = ?,
         instalador_id = ?, datos_tecnicos_json = ? WHERE id = ?
     """
     return _execute_update_delete(conn, sql, (descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_str, instalacion_id))
@@ -356,7 +356,7 @@ def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
     return _execute_select(conn, sql.replace('?','%s')) # Reemplazo manual porque no hay params
 
 # ... (El resto de tus funciones CRUD pueden ser adaptadas usando las funciones de ayuda _execute_*)
-# --- Inversores ---
+# --- inversores ---
 def add_inversor(conn, data_dict):
     fields = ['nombre_inversor', 'potencia_salida_va', 'largo_inversor_mm', 'ancho_inversor_mm',
               'profundo_inversor_mm', 'peso_inversor_kg', 'proteccion_ip_inversor',
@@ -365,7 +365,7 @@ def add_inversor(conn, data_dict):
     placeholders = ', '.join(['?'] * len(fields))
     columns = ', '.join(fields)
     values = tuple(data_dict.get(f) for f in fields)
-    sql = f"INSERT INTO Inversores ({columns}) VALUES ({placeholders})"
+    sql = f"INSERT INTO inversores ({columns}) VALUES ({placeholders})"
     return _execute_insert(conn, sql, values)
 
 def update_inversor(conn, inversor_id, data_dict):
@@ -376,10 +376,10 @@ def update_inversor(conn, inversor_id, data_dict):
     set_clause = ', '.join([f"{field} = ?" for field in fields])
     values = [data_dict.get(f) for f in fields]
     values.append(inversor_id)
-    sql = f"UPDATE Inversores SET {set_clause} WHERE id = ?"
+    sql = f"UPDATE inversores SET {set_clause} WHERE id = ?"
     return _execute_update_delete(conn, sql, tuple(values))
 
-# --- PanelesSolares ---
+# --- paneles_solares ---
 def add_panel_solar(conn, data_dict):
     fields = ['nombre_panel', 'potencia_pico_w', 'largo_mm', 'ancho_mm', 'profundidad_mm',
               'peso_kg', 'eficiencia_panel_porcentaje', 'tension_circuito_abierto_voc',
@@ -388,7 +388,7 @@ def add_panel_solar(conn, data_dict):
     placeholders = ', '.join(['?'] * len(fields))
     columns = ', '.join(fields)
     values = tuple(data_dict.get(f) for f in fields)
-    sql = f"INSERT INTO PanelesSolares ({columns}) VALUES ({placeholders})"
+    sql = f"INSERT INTO paneles_solares ({columns}) VALUES ({placeholders})"
     return _execute_insert(conn, sql, values)
 
 def update_panel_solar(conn, panel_id, data_dict):
@@ -399,21 +399,21 @@ def update_panel_solar(conn, panel_id, data_dict):
     set_clause = ', '.join([f"{field} = ?" for field in fields])
     values = [data_dict.get(f) for f in fields]
     values.append(panel_id)
-    sql = f"UPDATE PanelesSolares SET {set_clause} WHERE id = ?"
+    sql = f"UPDATE paneles_solares SET {set_clause} WHERE id = ?"
     return _execute_update_delete(conn, sql, tuple(values))
 
-# --- Contadores ---
+# --- contadores ---
 def add_contador(conn, data_dict):
     nombre = data_dict.get('nombre_contador')
-    sql = "INSERT INTO Contadores (nombre_contador) VALUES (?)"
+    sql = "INSERT INTO contadores (nombre_contador) VALUES (?)"
     return _execute_insert(conn, sql, (nombre,))
 
 def update_contador(conn, contador_id, data_dict):
     nombre = data_dict.get('nombre_contador')
-    sql = "UPDATE Contadores SET nombre_contador = ? WHERE id = ?"
+    sql = "UPDATE contadores SET nombre_contador = ? WHERE id = ?"
     return _execute_update_delete(conn, sql, (nombre, contador_id))
 
-# --- Baterias ---
+# --- baterias ---
 def add_bateria(conn, data_dict):
     nombre = data_dict.get('nombre_bateria')
     capacidad = data_dict.get('capacidad_kwh')
@@ -421,7 +421,7 @@ def add_bateria(conn, data_dict):
         capacidad_float = float(str(capacidad).replace(",", "."))
     except (ValueError, TypeError):
         return None, f"Capacidad '{capacidad}' no es un número válido."
-    sql = "INSERT INTO Baterias (nombre_bateria, capacidad_kwh) VALUES (?, ?)"
+    sql = "INSERT INTO baterias (nombre_bateria, capacidad_kwh) VALUES (?, ?)"
     return _execute_insert(conn, sql, (nombre, capacidad_float))
 
 def update_bateria(conn, bateria_id, data_dict):
@@ -431,7 +431,7 @@ def update_bateria(conn, bateria_id, data_dict):
         capacidad_float = float(str(capacidad).replace(",", "."))
     except (ValueError, TypeError):
         return False, f"Capacidad '{capacidad}' no es un número válido."
-    sql = "UPDATE Baterias SET nombre_bateria = ?, capacidad_kwh = ? WHERE id = ?"
+    sql = "UPDATE baterias SET nombre_bateria = ?, capacidad_kwh = ? WHERE id = ?"
     return _execute_update_delete(conn, sql, (nombre, capacidad_float, bateria_id))
 
 
