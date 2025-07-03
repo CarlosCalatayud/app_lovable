@@ -1,0 +1,708 @@
+# app/api_routes.py
+from flask import Blueprint, jsonify, request, current_app, send_file, make_response
+import json # Para manejar los datos técnicos
+from .db import database  # Asumiendo que database.py está adaptado
+from .calc import calculations
+from .generation import doc_generator
+import os
+import io # Para trabajar con bytes en memoria
+import zipfile # Para crear archivos ZIP
+
+bp_api = Blueprint('api', __name__)
+
+def get_db_connection():
+    # Helper para obtener conexión a la BD. Podrías usar g de Flask.
+    return database.connect_db()
+
+# --- Endpoints para Instalaciones ---
+@bp_api.route('/instalaciones', methods=['GET'])
+def get_instalaciones():
+    conn = get_db_connection()
+    # Usa tu función get_all_instalaciones, adáptala si es necesario
+    # para devolver una lista de diccionarios fácilmente serializables a JSON
+    instalaciones_raw = database.get_all_instalaciones(conn) # Esta función devuelve (id, descripcion, fecha_creacion)
+    conn.close()
+    # Convertir sqlite3.Row a dicts
+    instalaciones = [dict(row) for row in instalaciones_raw]
+    return jsonify(instalaciones)
+
+@bp_api.route('/instalaciones/<int:instalacion_id>', methods=['GET'])
+def get_instalacion_detalle(instalacion_id):
+    conn = get_db_connection()
+    # Usa tu función get_instalacion_completa
+    instalacion = database.get_instalacion_completa(conn, instalacion_id)
+    conn.close()
+    if instalacion:
+        return jsonify(instalacion) # get_instalacion_completa ya devuelve un dict
+    return jsonify({'error': 'Instalación no encontrada'}), 404
+
+@bp_api.route('/instalaciones', methods=['POST'])
+def create_instalacion():
+    data = request.json
+    # Extraer datos del request.json
+    # Tu gui.py serializaba 'datos_tecnicos' como JSON. El frontend enviará un dict.
+    # database.add_instalacion espera datos_tecnicos como un dict.
+    descripcion = data.get('descripcion')
+    usuario_id = data.get('usuario_id')
+    promotor_id = data.get('promotor_id')
+    instalador_id = data.get('instalador_id')
+    datos_tecnicos = data.get('datos_tecnicos', {}) # datos_tecnicos es un dict
+
+    conn = get_db_connection()
+    new_id = database.add_instalacion(conn, descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos)
+    conn.close()
+
+    if new_id:
+        return jsonify({'id': new_id, 'message': 'Instalación creada'}), 201
+    return jsonify({'error': 'Error al crear instalación'}), 400
+
+@bp_api.route('/instalaciones/<int:instalacion_id>', methods=['PUT'])
+def update_instalacion_endpoint(instalacion_id):
+    data = request.json
+    current_app.logger.info(f"Recibida petición PUT para actualizar instalación ID: {instalacion_id} con datos: {data}")
+
+    conn = get_db_connection()
+    try:
+        # La función database.update_instalacion devuelve (True/False, "mensaje")
+        success, message = database.update_instalacion(
+            conn,
+            instalacion_id,
+            data.get('descripcion'),
+            data.get('usuario_id'),
+            data.get('promotor_id'),
+            data.get('instalador_id'),
+            data.get('datos_tecnicos', {}) # Asegurar que datos_tecnicos es un dict
+        )
+        conn.commit() # Importante: commit después de la operación de escritura
+        
+        if success:
+            current_app.logger.info(f"Instalación ID {instalacion_id} actualizada: {message}")
+            return jsonify({'message': message}), 200
+        else:
+            current_app.logger.warning(f"Fallo al actualizar instalación ID {instalacion_id}: {message}")
+            # Si 'message' ya indica la razón (ej. "no encontrado"), usarlo.
+            # Podrías devolver 404 si 'no encontrado' es una posibilidad.
+            return jsonify({'error': message or 'Error al actualizar la instalación o no se encontraron cambios.'}), 400 
+    except Exception as e:
+        if conn: # Si la conexión aún está abierta y hay un error, hacer rollback
+            conn.rollback()
+        current_app.logger.error(f"Excepción al actualizar instalación ID {instalacion_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor al actualizar instalación.'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@bp_api.route('/instalaciones/<int:instalacion_id>', methods=['DELETE']) # <--- DEBE TENER EL ID Y 'DELETE'
+def delete_instalacion_api(instalacion_id): # Renombrado para claridad
+    conn = get_db_connection()
+    try:
+        # Asume que delete_instalacion devuelve (True/False, "mensaje")
+        success, message = database.delete_instalacion(conn, instalacion_id)
+        if success:
+            return jsonify({'message': message}), 200
+        else:
+            # Error al eliminar (ej. no encontrado, o dependencia si no se maneja en BD)
+            return jsonify({'error': message or 'Error al eliminar instalación'}), 400 # o 404
+    except Exception as e:
+        current_app.logger.error(f"Error en delete_instalacion_api (id: {instalacion_id}): {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# --- Endpoint para generar documentos ---
+# @bp_api.route('/instalaciones/<int:instalacion_id>/generate-docs', methods=['POST'])
+# def generate_docs_api(instalacion_id):
+#     # En el futuro, podrías pasar qué documentos generar en el request.json
+#     # doc_types_to_generate = request.json.get('documentos', [])
+
+#     conn = get_db_connection()
+#     instalacion_completa = database.get_instalacion_completa(conn, instalacion_id)
+
+#     if not instalacion_completa:
+#         conn.close()
+#         return jsonify({"error": "Instalación no encontrada"}), 404
+
+#     # 'instalacion_completa' es el 'user_inputs' para calculations
+#     # y ya contiene datos_tecnicos como un dict
+#     # Asegúrate que los nombres de las claves en instalacion_completa coincidan
+#     # con lo que espera calculate_all_derived_data
+    
+#     # Si 'datos_tecnicos' está anidado:
+#     user_inputs_for_calc = instalacion_completa.get('datos_tecnicos', {})
+#     # Añade otros campos necesarios para los cálculos que están al nivel superior
+#     user_inputs_for_calc.update({
+#         k: v for k, v in instalacion_completa.items() if k != 'datos_tecnicos'
+#     })
+    
+#     # O si `calculate_all_derived_data` espera que `user_inputs` sea el dict plano
+#     # que se guardaba como JSON (y que ahora es `instalacion_completa['datos_tecnicos']`)
+#     # más los datos de las entidades relacionadas:
+#     # Deberás reestructurar `user_inputs_for_calc` para que tenga la forma
+#     # que `calculate_all_derived_data` espera. Esto es CRUCIAL.
+#     # Probablemente `user_inputs_for_calc` deba ser el `datos_tecnicos_dict`
+#     # más los datos de las entidades (usuario, promotor, instalador) y de la propia instalación.
+
+#     # Ejemplo: Asumiendo que calculations.py espera un dict plano:
+#     context_dict = {}
+#     context_dict.update(instalacion_completa.get('datos_tecnicos', {}))
+#     print("instalacion completa values", instalacion_completa.values())
+#     print("instalacion completa items", instalacion_completa.items())
+#     context_dict.update({ # Añadir datos de entidades y generales
+#         'descripcion_instalacion': instalacion_completa.get('descripcion'),
+#         'fecha_creacion_instalacion': instalacion_completa.get('fecha_creacion'),
+#         'nombre_usuario': instalacion_completa.get('nombre_usuario'),
+#         # ... y así sucesivamente para todos los datos de entidades
+#         # que se usan directamente en las plantillas o en los cálculos
+#     })
+
+#     # Llamar a los cálculos
+#     calculated_data = calculations.calculate_all_derived_data(context_dict, conn)
+#     conn.close() # Cerramos la conexión después de los cálculos
+
+#     # Combinar datos originales y calculados para la plantilla
+#     final_context = {**context_dict, **calculated_data}
+
+#     # Lógica de generación de documentos (simplificada)
+#     # Deberías tener una lista de plantillas y nombres de salida
+#     template_name = "CERTIFICADO FIN DE OBRA.docx" # Esto debería ser dinámico
+#     template_path = os.path.join(current_app.config['TEMPLATES_PATH'], template_name)
+#     output_filename = f"documento_instalacion_{instalacion_id}_{template_name}"
+#     output_path = os.path.join(current_app.config['OUTPUT_DOCS_PATH'], output_filename)
+
+#     success_generation = doc_generator.fill_template_docxtpl(template_path, output_path, final_context)
+
+#     if success_generation:
+#         # Ofrecer el archivo para descarga
+#         return send_file(output_path, as_attachment=True)
+#     else:
+#         return jsonify({"error": "Error al generar el documento"}), 500
+# NUEVO Endpoint para generar documentos seleccionados
+@bp_api.route('/instalaciones/<int:instalacion_id>/generate-selected-docs', methods=['POST'])
+def generate_selected_docs_api(instalacion_id):
+    data = request.json
+    selected_template_files = data.get('documentos', []) # Array de nombres de archivo de plantilla
+
+    if not selected_template_files:
+        return jsonify({"error": "No se seleccionaron documentos para generar."}), 400
+
+    conn = get_db_connection()
+    try:
+        instalacion_completa = database.get_instalacion_completa(conn, instalacion_id)
+        if not instalacion_completa:
+            return jsonify({"error": "Instalación no encontrada"}), 404
+
+        # Preparar el diccionario de contexto para las plantillas
+        # (Esta lógica es la misma que tenías para la generación de un solo documento)
+        context_dict = {}
+        context_dict.update(instalacion_completa.get('datos_tecnicos', {})) # Datos del JSON
+        # Añadir otros campos relevantes de la instalación y entidades relacionadas
+        for key, value in instalacion_completa.items():
+            if key not in ['datos_tecnicos', 'datos_tecnicos_json']: # Evitar duplicar o el string JSON
+                context_dict[key] = value
+        
+        # Llamar a los cálculos
+        # Asegúrate que calculate_all_derived_data espera la conexión a la BD
+        # si realiza lookups directos.
+        calculated_data = calculations.calculate_all_derived_data(context_dict, conn)
+        final_context = {**context_dict, **calculated_data}
+
+        # Definir las plantillas disponibles y sus nombres de archivo de salida
+        # Esto debería coincidir con lo que tienes en el frontend
+        # y los nombres de archivo reales de tus plantillas .docx
+        available_templates_map = {
+            "MEMORIA TECNICA.docx": "Memoria Tecnica Instalacion {}.docx",
+            "ESTUDIO BASICO SEG Y SALUD.docx": "Estudio Basico SyS Instalacion {}.docx",
+            "DECLARACION RESPONSABLE.docx": "Declaracion Responsable Instalacion {}.docx",
+            "CERTIFICADO FIN DE OBRA.docx": "Certificado Fin Obra Instalacion {}.docx",
+            "GESTION RESIDUOS.docx": "Gestion Residuos Instalacion {}.docx",
+            "PLAN DE CONTROL DE CALIDAD.docx": "Plan Control Calidad Instalacion {}.docx"
+        }
+        
+        generated_files_paths = [] # Para almacenar rutas de archivos generados temporalmente
+
+        # Ruta base para las plantillas .docx
+        # Asegúrate que current_app.config['TEMPLATES_PATH'] está configurado correctamente en app/__init__.py
+        # y que apunta al directorio donde están tus archivos .docx
+        templates_base_path = current_app.config.get('TEMPLATES_PATH', './plantillas_docs') # Proporciona un default
+        if not os.path.isdir(templates_base_path):
+            current_app.logger.error(f"El directorio de plantillas '{templates_base_path}' no existe.")
+            return jsonify({"error": "Error de configuración del servidor: directorio de plantillas no encontrado."}), 500
+
+
+        # Ruta para guardar temporalmente los documentos generados
+        # Debería ser un directorio donde la app tenga permisos de escritura.
+        # Podrías usar tempfile para esto también si no quieres guardarlos permanentemente.
+        output_dir = current_app.config.get('OUTPUT_DOCS_PATH', './generated_docs_temp')
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+
+        for template_file_name in selected_template_files:
+            if template_file_name in available_templates_map:
+                template_path = os.path.join(templates_base_path, template_file_name)
+                
+                # Crear un nombre de archivo de salida único o descriptivo
+                # Usar el ID de instalación para hacerlo algo único si se generan para varias instalaciones
+                output_filename_template = available_templates_map[template_file_name]
+                # Sanitize o usa un nombre de campo seguro de la instalación para el nombre
+                # Por ahora, usamos el ID de instalación
+                output_filename = output_filename_template.format(instalacion_id)
+                output_path = os.path.join(output_dir, output_filename)
+
+                if not os.path.exists(template_path):
+                    current_app.logger.error(f"Plantilla no encontrada: {template_path}")
+                    # Podrías continuar con las otras o retornar un error
+                    continue 
+
+                success_generation = doc_generator.fill_template_docxtpl(template_path, output_path, final_context)
+                if success_generation:
+                    generated_files_paths.append({"path": output_path, "name_in_zip": output_filename})
+                else:
+                    current_app.logger.error(f"Error al generar documento desde plantilla: {template_file_name}")
+                    # Podrías decidir si continuar o fallar aquí
+            else:
+                current_app.logger.warning(f"Plantilla solicitada no reconocida: {template_file_name}")
+
+
+        if not generated_files_paths:
+            return jsonify({"error": "No se pudieron generar los documentos seleccionados o no se encontraron plantillas."}), 500
+
+        if len(generated_files_paths) == 1:
+            # Si solo se generó un archivo, enviarlo directamente
+            file_to_send = generated_files_paths[0]
+            # Es importante eliminar el archivo después de enviarlo si es temporal
+            # o tener una tarea de limpieza.
+            # Por ahora, lo enviamos y el navegador lo descarga.
+            # El cliente es responsable de qué hacer con él.
+            # Para una mejor gestión, se podría usar after_this_request para eliminarlo.
+            response = send_file(file_to_send["path"], as_attachment=True, download_name=file_to_send["name_in_zip"])
+            
+            # Opcional: Limpiar el archivo después de enviarlo
+            # @response.call_on_close
+            # def process_after_request():
+            #     try:
+            #         os.remove(file_to_send["path"])
+            #     except Exception as e_remove:
+            #         current_app.logger.error(f"Error al eliminar archivo temporal {file_to_send['path']}: {e_remove}")
+            return response
+
+        else:
+            # Si se generaron múltiples archivos, crear un ZIP
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                for file_info in generated_files_paths:
+                    zf.write(file_info["path"], arcname=file_info["name_in_zip"]) # arcname es el nombre dentro del ZIP
+            
+            zip_buffer.seek(0)
+            zip_filename = f"Documentos_Instalacion_{instalacion_id}.zip"
+            
+            response = make_response(zip_buffer.getvalue())
+            response.headers['Content-Type'] = 'application/zip'
+            response.headers['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+
+            # Limpiar los archivos individuales después de crear el ZIP
+            # for file_info in generated_files_paths:
+            #     try:
+            #         os.remove(file_info["path"])
+            #     except Exception as e_remove:
+            #         current_app.logger.error(f"Error al eliminar archivo temporal {file_info['path']}: {e_remove}")
+            return response
+
+    except Exception as e:
+        current_app.logger.error(f"Error general en generate_selected_docs_api: {e}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor al generar documentos."}), 500
+    finally:
+        if conn:
+            conn.close()
+        # Considerar limpiar los archivos generados si no se hizo en el try o si hubo un error antes de enviarlos.
+        # Esto es más complejo si se quiere hacer robustamente.
+        # Por ahora, si no se crea el ZIP o se envía un solo archivo, los archivos temporales pueden quedar.
+        # Una mejor solución sería usar el módulo `tempfile` de Python para crear archivos/directorios temporales
+        # que se limpian automáticamente.
+
+
+# --- Endpoints para Usuarios (completando) ---
+@bp_api.route('/usuarios', methods=['POST']) # <--- ¡ASEGÚRATE QUE 'POST' ESTÁ AQUÍ!
+def create_usuario_api(): # Renombrado para evitar conflictos
+    data = request.json
+    conn = get_db_connection()
+    try:
+        # Asume que add_usuario devuelve (id/None, mensaje)
+        new_id, message = database.add_usuario(conn,
+                                            data.get('nombre'),
+                                            data.get('apellidos'),
+                                            data.get('dni'),
+                                            data.get('direccion'))
+        if new_id:
+            return jsonify({'id': new_id, 'message': message}), 201
+        else:
+            # DNI duplicado u otro error de BD
+            return jsonify({'error': message or 'Error al crear usuario'}), 400 # o 409 para conflicto
+    except Exception as e:
+        current_app.logger.error(f"Error en create_usuario_api: {e}")
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@bp_api.route('/usuarios', methods=['GET'])
+def get_usuarios():
+    conn = get_db_connection()
+    # Usa tu función get_all_instalaciones, adáptala si es necesario
+    # para devolver una lista de diccionarios fácilmente serializables a JSON
+    usuarios_raw = database.get_all_usuarios(conn) # Esta función devuelve (id, descripcion, fecha_creacion)
+    conn.close()
+    # Convertir sqlite3.Row a dicts
+    usuarios = [dict(row) for row in usuarios_raw]
+    return jsonify(usuarios)
+
+@bp_api.route('/usuarios/<int:user_id>', methods=['GET'])
+def get_usuario(user_id):
+    conn = get_db_connection()
+    usuario = database.get_usuario_by_id(conn, user_id)
+    conn.close()
+    if usuario:
+        return jsonify(usuario)
+    return jsonify({'error': 'Usuario no encontrado'}), 404
+
+@bp_api.route('/usuarios/<int:user_id>', methods=['PUT'])
+def update_usuario_api(user_id): # Renombrado para evitar conflicto de nombres
+    data = request.json
+    conn = get_db_connection()
+    # Asume que los campos son: nombre, apellidos, dni, direccion
+    success, message = database.update_usuario(conn, user_id,
+                                   data.get('nombre'), data.get('apellidos'),
+                                   data.get('dni'), data.get('direccion'))
+    conn.close()
+    if success is True: # Si update_usuario devuelve solo booleano
+        return jsonify({'message': 'Usuario actualizado'}), 200
+    elif success is False and message: # Si devuelve (False, "mensaje de error")
+         return jsonify({'error': message}), 400 # O 409 para conflicto (DNI duplicado)
+    return jsonify({'error': 'Error al actualizar usuario'}), 500
+
+
+@bp_api.route('/usuarios/<int:user_id>', methods=['DELETE'])
+def delete_usuario_api(user_id): # Renombrado
+    conn = get_db_connection()
+    success, message = database.delete_usuario(conn, user_id) # delete_usuario devuelve (bool, mensaje)
+    conn.close()
+    if success:
+        return jsonify({'message': message}), 200
+    return jsonify({'error': message}), 400 # O 409 si no se puede eliminar por dependencias
+
+
+# --- Endpoints para Promotores (CRUD completo) ---
+@bp_api.route('/promotores', methods=['POST'])
+def create_promotor():
+    data = request.json
+    conn = get_db_connection()
+    promotor_id = database.add_promotor(conn,
+                                        data.get('nombre_razon_social'),
+                                        data.get('apellidos'),
+                                        data.get('direccion_fiscal'),
+                                        data.get('dni_cif'))
+    conn.close()
+    if promotor_id:
+        return jsonify({'id': promotor_id, 'message': 'Promotor creado'}), 201
+    return jsonify({'error': 'Error al crear promotor o DNI/CIF duplicado'}), 400
+
+@bp_api.route('/promotores', methods=['GET'])
+def get_promotores():
+    conn = get_db_connection()
+    promotores = database.get_all_promotores(conn)
+    conn.close()
+    return jsonify(promotores)
+
+@bp_api.route('/promotores/<int:promotor_id>', methods=['GET'])
+def get_promotor(promotor_id):
+    conn = get_db_connection()
+    promotor = database.get_promotor_by_id(conn, promotor_id)
+    conn.close()
+    if promotor:
+        return jsonify(promotor)
+    return jsonify({'error': 'Promotor no encontrado'}), 404
+
+@bp_api.route('/promotores/<int:promotor_id>', methods=['PUT'])
+def update_promotor_api(promotor_id):
+    data = request.json
+    conn = get_db_connection()
+    success, message = database.update_promotor(conn, promotor_id,
+                                    data.get('nombre_razon_social'),
+                                    data.get('apellidos'),
+                                    data.get('direccion_fiscal'),
+                                    data.get('dni_cif'))
+    conn.close()
+    if success is True:
+        return jsonify({'message': 'Promotor actualizado'}), 200
+    elif success is False and message:
+        return jsonify({'error': message}), 400
+    return jsonify({'error': 'Error al actualizar promotor'}), 500
+
+@bp_api.route('/promotores/<int:promotor_id>', methods=['DELETE'])
+def delete_promotor_api(promotor_id):
+    conn = get_db_connection()
+    success, message = database.delete_promotor(conn, promotor_id)
+    conn.close()
+    if success:
+        return jsonify({'message': message}), 200
+    return jsonify({'error': message}), 400
+
+
+# --- Endpoints para Instaladores (CRUD completo) ---
+@bp_api.route('/instaladores', methods=['POST'])
+def create_instalador():
+    data = request.json
+    conn = get_db_connection()
+    instalador_id = database.add_instalador(conn,
+                                            data.get('nombre_empresa'),
+                                            data.get('direccion_empresa'),
+                                            data.get('cif_empresa'),
+                                            data.get('nombre_tecnico'),
+                                            data.get('competencia_tecnico'))
+    conn.close()
+    if instalador_id:
+        return jsonify({'id': instalador_id, 'message': 'Instalador creado'}), 201
+    return jsonify({'error': 'Error al crear instalador o CIF duplicado'}), 400
+
+@bp_api.route('/instaladores', methods=['GET'])
+def get_instaladores():
+    conn = get_db_connection()
+    instaladores = database.get_all_instaladores(conn)
+    conn.close()
+    return jsonify(instaladores)
+
+@bp_api.route('/instaladores/<int:instalador_id>', methods=['GET'])
+def get_instalador(instalador_id):
+    conn = get_db_connection()
+    instalador = database.get_instalador_by_id(conn, instalador_id)
+    conn.close()
+    if instalador:
+        return jsonify(instalador)
+    return jsonify({'error': 'Instalador no encontrado'}), 404
+
+@bp_api.route('/instaladores/<int:instalador_id>', methods=['PUT'])
+def update_instalador_api(instalador_id):
+    data = request.json
+    conn = get_db_connection()
+    success, message = database.update_instalador(conn, instalador_id,
+                                        data.get('nombre_empresa'),
+                                        data.get('direccion_empresa'),
+                                        data.get('cif_empresa'),
+                                        data.get('nombre_tecnico'),
+                                        data.get('competencia_tecnico'))
+    conn.close()
+    if success is True:
+        return jsonify({'message': 'Instalador actualizado'}), 200
+    elif success is False and message:
+        return jsonify({'error': message}), 400
+    return jsonify({'error': 'Error al actualizar instalador'}), 500
+
+@bp_api.route('/instaladores/<int:instalador_id>', methods=['DELETE'])
+def delete_instalador_api(instalador_id):
+    conn = get_db_connection()
+    success, message = database.delete_instalador(conn, instalador_id)
+    conn.close()
+    if success:
+        return jsonify({'message': message}), 200
+    return jsonify({'error': message}), 400
+
+# --- MAPAS DE CONFIGURACIÓN PARA PRODUCTOS Y CATÁLOGOS ---
+PRODUCT_TABLE_MAP = {
+    "inversores": {"table": "Inversores", "order_by": "nombre_inversor", "add_func": database.add_inversor, "update_func": database.update_inversor},
+    "paneles": {"table": "PanelesSolares", "order_by": "nombre_panel", "add_func": database.add_panel_solar, "update_func": database.update_panel_solar},
+    "contadores": {"table": "Contadores", "order_by": "nombre_contador", "add_func": database.add_contador, "update_func": database.update_contador},
+    "baterias": {"table": "Baterias", "order_by": "nombre_bateria", "add_func": database.add_bateria, "update_func": database.update_bateria},
+}
+
+CATALOG_TABLE_MAP = {
+    "tipos_vias": {"table": "TiposVias", "order_by": "nombre_tipo_via"},
+    "distribuidoras": {"table": "Distribuidoras", "order_by": "nombre_distribuidora"},
+    "categorias_instalador": {"table": "CategoriasInstalador", "order_by": "nombre_categoria"}
+}
+
+
+@bp_api.route('/productos/<string:product_type>', methods=['GET'])
+def get_all_products_by_type(product_type):
+    if product_type not in PRODUCT_TABLE_MAP:
+        current_app.logger.error(f"PRODUCT_TABLE_MAP no contiene la clave: {product_type}")
+        return jsonify({'error': f'Tipo de producto no válido en map: {product_type}'}), 404
+    
+    config = PRODUCT_TABLE_MAP[product_type]
+    table_name = config.get("table")
+    order_by = config.get("order_by", "id")
+
+    if not table_name:
+        current_app.logger.error(f"Configuración para product_type '{product_type}' no tiene 'table'.")
+        return jsonify({'error': f'Configuración interna errónea para {product_type}'}), 500
+    
+    conn = None
+    try:
+        conn = get_db_connection()
+        items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
+    except ValueError as ve:
+        current_app.logger.error(f"Error de valor en get_all_products_by_type para {product_type}: {ve}", exc_info=True)
+        if conn: conn.close() # Asegurar cierre de conexión en caso de error temprano
+        return jsonify({'error': str(ve)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error en API get_all_products_by_type para {product_type}: {e}", exc_info=True)
+        if conn: conn.close()
+        return jsonify({'error': f'Error interno al obtener {product_type}'}), 500
+    finally:
+        if conn: 
+            conn.close()
+
+    return jsonify(items)
+
+
+@bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['GET'])
+def get_product_by_id(product_type, item_id):
+    if product_type not in PRODUCT_TABLE_MAP:
+        return jsonify({'error': 'Tipo de producto no válido'}), 404
+    
+    table_name = PRODUCT_TABLE_MAP[product_type]["table"]
+    conn = get_db_connection()
+    item = database.get_item_by_id_from_table(conn, table_name, item_id)
+    conn.close()
+    if item:
+        return jsonify(item)
+    return jsonify({'error': f'{product_type[:-1].capitalize()} no encontrado'}), 404
+
+
+@bp_api.route('/productos/<string:product_type>', methods=['POST'])
+def create_product(product_type):
+    if product_type not in PRODUCT_TABLE_MAP or "add_func" not in PRODUCT_TABLE_MAP[product_type]:
+        return jsonify({'error': 'Creación no soportada para este tipo de producto o tipo no válido'}), 400
+    
+    data = request.json
+    conn = get_db_connection()
+    add_function = PRODUCT_TABLE_MAP[product_type]["add_func"]
+    result = add_function(conn, data) # add_func puede devolver ID o (None, "mensaje")
+    conn.close()
+
+    item_id = None
+    error_message = "Error al crear producto."
+
+    if isinstance(result, tuple) and result[0] is None: # (None, "mensaje de error")
+        item_id = None
+        error_message = result[1]
+    elif isinstance(result, int): # ID devuelto
+        item_id = result
+    # else: caso no esperado
+
+    if item_id:
+        return jsonify({'id': item_id, 'message': f'{product_type[:-1].capitalize()} creado'}), 201
+    return jsonify({'error': error_message}), 400
+
+
+@bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['PUT'])
+def update_product(product_type, item_id):
+    if product_type not in PRODUCT_TABLE_MAP or "update_func" not in PRODUCT_TABLE_MAP[product_type]:
+        return jsonify({'error': 'Actualización no soportada para este tipo de producto o tipo no válido'}), 400
+
+    data = request.json
+    conn = get_db_connection()
+    update_function = PRODUCT_TABLE_MAP[product_type]["update_func"]
+    result = update_function(conn, item_id, data) # update_func puede devolver bool o (False, "mensaje")
+    conn.close()
+
+    success = False
+    message = "Error al actualizar producto."
+
+    if isinstance(result, tuple) and result[0] is False: # (False, "mensaje de error")
+        success = False
+        message = result[1]
+    elif isinstance(result, bool) and result is True: # True devuelto
+        success = True
+        message = f'{product_type[:-1].capitalize()} actualizado'
+    # else: caso no esperado
+
+    if success:
+        return jsonify({'message': message}), 200
+    return jsonify({'error': message}), 400
+
+
+@bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['DELETE'])
+def delete_product(product_type, item_id):
+    if product_type not in PRODUCT_TABLE_MAP: # Solo los que tienen CRUD completo
+        return jsonify({'error': 'Eliminación no soportada para este tipo de producto o tipo no válido'}), 400
+
+    table_name = PRODUCT_TABLE_MAP[product_type]["table"]
+    conn = get_db_connection()
+    success, message = database.delete_item_from_table(conn, table_name, item_id)
+    conn.close()
+    if success:
+        return jsonify({'message': message}), 200
+    return jsonify({'error': message}), 400
+
+# ... (Implementar GET by ID, PUT, DELETE para Usuarios) ...
+# ... (Implementar CRUD completo para Promotores, Instaladores, y cada tipo de Producto Técnico) ...
+# Ejemplo para get_all_db_inversores:
+@bp_api.route('/productos/inversores', methods=['GET'])
+def get_inversores(): # Esta es la función que está dando error
+    conn = None
+    try:
+        conn = get_db_connection()
+        # Pasa "Inversores" (con I mayúscula)
+        inversores = database.get_all_from_table(conn, "Inversores", order_by_column="nombre_inversor")
+        return jsonify(inversores)
+    except ValueError as ve:
+        current_app.logger.error(f"ValueError en get_inversores: {ve}", exc_info=True)
+        return jsonify({'error': str(ve)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error en get_inversores: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno al obtener inversores'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+# Necesitarás endpoints para todos los catálogos (TiposVias, Distribuidoras, etc.)
+# que se usan en los comboboxes de la GUI original.
+@bp_api.route('/catalogos/tipos_vias', methods=['GET'])
+def get_tipos_vias(): # Esta es la función que está dando error
+    conn = None
+    try:
+        conn = get_db_connection()
+        # Pasa "TiposVias" (con T y V mayúsculas)
+        tipos = database.get_all_from_table(conn, "TiposVias", order_by_column="nombre_tipo_via")
+        return jsonify(tipos)
+    except ValueError as ve:
+        current_app.logger.error(f"ValueError en get_tipos_vias: {ve}", exc_info=True)
+        return jsonify({'error': str(ve)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error en get_tipos_vias: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno al obtener tipos de vía'}), 500
+    finally:
+        if conn:
+            conn.close()
+
+@bp_api.route('/catalogos/<string:catalog_name>', methods=['GET'])
+def get_catalog_data(catalog_name):
+    if catalog_name not in CATALOG_TABLE_MAP:
+        current_app.logger.error(f"CATALOG_TABLE_MAP no contiene la clave: {catalog_name}")
+        return jsonify({'error': f'Catálogo no válido en map: {catalog_name}'}), 404
+
+    config = CATALOG_TABLE_MAP[catalog_name]
+    table_name = config.get("table")
+    order_by = config.get("order_by", "id")
+
+    if not table_name:
+        current_app.logger.error(f"Configuración para catalog_name '{catalog_name}' no tiene 'table'.")
+        return jsonify({'error': f'Configuración interna errónea para {catalog_name}'}), 500
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
+    except ValueError as ve:
+        current_app.logger.error(f"Error de valor en get_catalog_data para {catalog_name}: {ve}", exc_info=True)
+        if conn: conn.close()
+        return jsonify({'error': str(ve)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error en API get_catalog_data para {catalog_name}: {e}", exc_info=True)
+        if conn: conn.close()
+        return jsonify({'error': f'Error interno al obtener {catalog_name}'}), 500
+    finally:
+        if conn: 
+            conn.close()
+    return jsonify(items)
