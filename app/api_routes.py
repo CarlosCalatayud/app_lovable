@@ -453,6 +453,15 @@ def get_instaladores():
     conn = get_db_connection()
     instaladores = database.get_all_instaladores(conn)
     conn.close()
+
+    # --- LÍNEAS DE DEPURACIÓN AÑADIDAS ---
+    # Esto imprimirá en los logs de Render
+    current_app.logger.info(f"Obtenidos {len(instaladores)} instaladores de la BD.")
+    # Si la lista no es muy larga, podemos incluso imprimirla
+    if instaladores:
+        current_app.logger.info(f"Datos de instaladores: {instaladores}")
+    # ------------------------------------
+
     return jsonify(instaladores)
 
 @bp_api.route('/instaladores/<int:instalador_id>', methods=['GET'])
@@ -522,6 +531,11 @@ def get_all_products_by_type(product_type):
     
     conn = None
     try:
+        # --- LOGGING AQUÍ ---
+        current_app.logger.info(f"Obtenidos {len(items)} items para el producto tipo '{product_type}'.")
+        if items:
+            current_app.logger.info(f"Datos: {items}")
+        # --------------------
         conn = get_db_connection()
         items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
     except ValueError as ve:
