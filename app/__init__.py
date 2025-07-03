@@ -22,14 +22,17 @@ def create_app(test_config=None):
     else:
         # Cargar configuración de prueba
         app.config.from_mapping(test_config)
-
-    # Asegurarse de que la carpeta de salida exista en el disco de Render
-    # Esta ruta no existirá localmente, así que comprobamos si estamos en Render
-    if os.environ.get("RENDER"):
-        try:
-            os.makedirs(app.config['OUTPUT_DOCS_PATH'], exist_ok=True)
-        except OSError as e:
-            app.logger.error(f"Error al crear el directorio de salida en Render Disk: {e}")
+    
+    # comprobacion de si existe el directorio de salida y si se puede escribir en él
+    if os.environ.get("RENDER") and not os.access(app.config['OUTPUT_DOCS_PATH'], os.W_OK):
+        app.logger.error(f"El directorio {app.config['OUTPUT_DOCS_PATH']} no existe o no se puede escribir en él.")
+    # # Asegurarse de que la carpeta de salida exista en el disco de Render
+    # # Esta ruta no existirá localmente, así que comprobamos si estamos en Render
+    # if os.environ.get("RENDER"):
+    #     try:
+    #         os.makedirs(app.config['OUTPUT_DOCS_PATH'], exist_ok=True)
+    #     except OSError as e:
+    #         app.logger.error(f"Error al crear el directorio de salida en Render Disk: {e}")
 
     # --- REGISTRAR BLUEPRINTS ---
     from . import api_routes

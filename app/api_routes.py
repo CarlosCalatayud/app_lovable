@@ -1,7 +1,7 @@
 # app/api_routes.py
 from flask import Blueprint, jsonify, request, current_app, send_file, make_response
 import json # Para manejar los datos técnicos
-from .db import database  # Asumiendo que database.py está adaptado
+from . import db as database # Importa el módulo y le da el alias 'database'
 from .calc import calculations
 from .generation import doc_generator
 import os
