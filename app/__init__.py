@@ -1,10 +1,13 @@
 # app/__init__.py
 import os
 from flask import Flask, jsonify
+from flask_cors import CORS # <--- 1. IMPORTA LA LIBRERÍA
 
 def create_app(test_config=None):
     # Crear e inicializar la app
     app = Flask(__name__, instance_relative_config=True)
+    
+    CORS(app) # <--- 2. APLICA CORS A TODA LA APLICACIÓN
 
     # --- CONFIGURACIÓN ---
     # Una clave secreta es necesaria para sesiones, etc. aunque no las uses explícitamente.
