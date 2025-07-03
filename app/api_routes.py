@@ -180,8 +180,9 @@ def delete_instalacion_api(instalacion_id): # Renombrado para claridad
 # NUEVO Endpoint para generar documentos seleccionados
 @bp_api.route('/instalaciones/<int:instalacion_id>/generate-selected-docs', methods=['POST'])
 def generate_selected_docs_api(instalacion_id):
+    # --- Esta parte inicial no cambia ---
     data = request.json
-    selected_template_files = data.get('documentos', []) # Array de nombres de archivo de plantilla
+    selected_template_files = data.get('documentos', [])
 
     if not selected_template_files:
         return jsonify({"error": "No se seleccionaron documentos para generar."}), 400
@@ -192,121 +193,88 @@ def generate_selected_docs_api(instalacion_id):
         if not instalacion_completa:
             return jsonify({"error": "Instalación no encontrada"}), 404
 
+        # ... (toda tu lógica para crear final_context sigue igual) ...
         # Preparar el diccionario de contexto para las plantillas
-        # (Esta lógica es la misma que tenías para la generación de un solo documento)
         context_dict = {}
-        context_dict.update(instalacion_completa.get('datos_tecnicos', {})) # Datos del JSON
-        # Añadir otros campos relevantes de la instalación y entidades relacionadas
+        context_dict.update(instalacion_completa.get('datos_tecnicos', {}))
         for key, value in instalacion_completa.items():
-            if key not in ['datos_tecnicos', 'datos_tecnicos_json']: # Evitar duplicar o el string JSON
+            if key not in ['datos_tecnicos', 'datos_tecnicos_json']:
                 context_dict[key] = value
         
-        # Llamar a los cálculos
-        # Asegúrate que calculate_all_derived_data espera la conexión a la BD
-        # si realiza lookups directos.
         calculated_data = calculations.calculate_all_derived_data(context_dict, conn)
         final_context = {**context_dict, **calculated_data}
+        
+        # --- AHORA VIENE EL CAMBIO ---
 
-        # Definir las plantillas disponibles y sus nombres de archivo de salida
-        # Esto debería coincidir con lo que tienes en el frontend
-        # y los nombres de archivo reales de tus plantillas .docx
+        generated_files_in_memory = [] # Almacenará (nombre_archivo, bytes_del_archivo)
+
+        # Mapa de plantillas
         available_templates_map = {
             "MEMORIA TECNICA.docx": "Memoria Tecnica Instalacion {}.docx",
-            "ESTUDIO BASICO SEG Y SALUD.docx": "Estudio Basico SyS Instalacion {}.docx",
-            "DECLARACION RESPONSABLE.docx": "Declaracion Responsable Instalacion {}.docx",
+            # ... tu mapa completo ...
             "CERTIFICADO FIN DE OBRA.docx": "Certificado Fin Obra Instalacion {}.docx",
-            "GESTION RESIDUOS.docx": "Gestion Residuos Instalacion {}.docx",
-            "PLAN DE CONTROL DE CALIDAD.docx": "Plan Control Calidad Instalacion {}.docx"
         }
         
-        generated_files_paths = [] # Para almacenar rutas de archivos generados temporalmente
-
-        # Ruta base para las plantillas .docx
-        # Asegúrate que current_app.config['TEMPLATES_PATH'] está configurado correctamente en app/__init__.py
-        # y que apunta al directorio donde están tus archivos .docx
-        templates_base_path = current_app.config.get('TEMPLATES_PATH', './plantillas_docs') # Proporciona un default
-        if not os.path.isdir(templates_base_path):
-            current_app.logger.error(f"El directorio de plantillas '{templates_base_path}' no existe.")
-            return jsonify({"error": "Error de configuración del servidor: directorio de plantillas no encontrado."}), 500
-
-
-        # Ruta para guardar temporalmente los documentos generados
-        # Debería ser un directorio donde la app tenga permisos de escritura.
-        # Podrías usar tempfile para esto también si no quieres guardarlos permanentemente.
-        output_dir = current_app.config.get('OUTPUT_DOCS_PATH', './generated_docs_temp')
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir, exist_ok=True)
+        templates_base_path = current_app.config.get('TEMPLATES_PATH', './plantillas_docs')
 
         for template_file_name in selected_template_files:
             if template_file_name in available_templates_map:
                 template_path = os.path.join(templates_base_path, template_file_name)
                 
-                # Crear un nombre de archivo de salida único o descriptivo
-                # Usar el ID de instalación para hacerlo algo único si se generan para varias instalaciones
-                output_filename_template = available_templates_map[template_file_name]
-                # Sanitize o usa un nombre de campo seguro de la instalación para el nombre
-                # Por ahora, usamos el ID de instalación
-                output_filename = output_filename_template.format(instalacion_id)
-                output_path = os.path.join(output_dir, output_filename)
-
                 if not os.path.exists(template_path):
                     current_app.logger.error(f"Plantilla no encontrada: {template_path}")
-                    # Podrías continuar con las otras o retornar un error
-                    continue 
+                    continue
 
-                success_generation = doc_generator.fill_template_docxtpl(template_path, output_path, final_context)
-                if success_generation:
-                    generated_files_paths.append({"path": output_path, "name_in_zip": output_filename})
-                else:
-                    current_app.logger.error(f"Error al generar documento desde plantilla: {template_file_name}")
-                    # Podrías decidir si continuar o fallar aquí
+                # 1. Crear un buffer de bytes en memoria
+                file_stream = io.BytesIO()
+
+                # 2. Llamar a tu generador para que guarde en el buffer, NO en un archivo
+                # Para esto, necesitamos una pequeña modificación en doc_generator.py (ver abajo)
+                # O podemos hacer el truco aquí mismo:
+                doc = doc_generator.DocxTemplate(template_path)
+                doc.render(final_context)
+                doc.save(file_stream) # Guardamos en el buffer de memoria
+                file_stream.seek(0) # Rebobinamos el buffer para poder leerlo
+
+                # 3. Guardar el nombre y los bytes en nuestra lista
+                output_filename = available_templates_map[template_file_name].format(instalacion_id)
+                generated_files_in_memory.append({
+                    "name": output_filename,
+                    "bytes": file_stream.getvalue()
+                })
             else:
                 current_app.logger.warning(f"Plantilla solicitada no reconocida: {template_file_name}")
 
+        if not generated_files_in_memory:
+            return jsonify({"error": "No se pudieron generar los documentos seleccionados."}), 500
 
-        if not generated_files_paths:
-            return jsonify({"error": "No se pudieron generar los documentos seleccionados o no se encontraron plantillas."}), 500
+        # --- Lógica para enviar la respuesta ---
 
-        if len(generated_files_paths) == 1:
-            # Si solo se generó un archivo, enviarlo directamente
-            file_to_send = generated_files_paths[0]
-            # Es importante eliminar el archivo después de enviarlo si es temporal
-            # o tener una tarea de limpieza.
-            # Por ahora, lo enviamos y el navegador lo descarga.
-            # El cliente es responsable de qué hacer con él.
-            # Para una mejor gestión, se podría usar after_this_request para eliminarlo.
-            response = send_file(file_to_send["path"], as_attachment=True, download_name=file_to_send["name_in_zip"])
-            
-            # Opcional: Limpiar el archivo después de enviarlo
-            # @response.call_on_close
-            # def process_after_request():
-            #     try:
-            #         os.remove(file_to_send["path"])
-            #     except Exception as e_remove:
-            #         current_app.logger.error(f"Error al eliminar archivo temporal {file_to_send['path']}: {e_remove}")
-            return response
-
+        if len(generated_files_in_memory) == 1:
+            # Si solo es un archivo, enviarlo directamente desde la memoria
+            file_to_send = generated_files_in_memory[0]
+            return send_file(
+                io.BytesIO(file_to_send["bytes"]),
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                as_attachment=True,
+                download_name=file_to_send["name"]
+            )
         else:
-            # Si se generaron múltiples archivos, crear un ZIP
+            # Si son varios, crear un ZIP en memoria
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-                for file_info in generated_files_paths:
-                    zf.write(file_info["path"], arcname=file_info["name_in_zip"]) # arcname es el nombre dentro del ZIP
+                for file_info in generated_files_in_memory:
+                    zf.writestr(file_info["name"], file_info["bytes"]) # Escribir bytes directamente
             
             zip_buffer.seek(0)
             zip_filename = f"Documentos_Instalacion_{instalacion_id}.zip"
             
-            response = make_response(zip_buffer.getvalue())
-            response.headers['Content-Type'] = 'application/zip'
-            response.headers['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
-
-            # Limpiar los archivos individuales después de crear el ZIP
-            # for file_info in generated_files_paths:
-            #     try:
-            #         os.remove(file_info["path"])
-            #     except Exception as e_remove:
-            #         current_app.logger.error(f"Error al eliminar archivo temporal {file_info['path']}: {e_remove}")
-            return response
+            return send_file(
+                zip_buffer,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=zip_filename
+            )
 
     except Exception as e:
         current_app.logger.error(f"Error general en generate_selected_docs_api: {e}", exc_info=True)
@@ -314,11 +282,6 @@ def generate_selected_docs_api(instalacion_id):
     finally:
         if conn:
             conn.close()
-        # Considerar limpiar los archivos generados si no se hizo en el try o si hubo un error antes de enviarlos.
-        # Esto es más complejo si se quiere hacer robustamente.
-        # Por ahora, si no se crea el ZIP o se envía un solo archivo, los archivos temporales pueden quedar.
-        # Una mejor solución sería usar el módulo `tempfile` de Python para crear archivos/directorios temporales
-        # que se limpian automáticamente.
 
 
 # --- Endpoints para Usuarios (completando) ---
