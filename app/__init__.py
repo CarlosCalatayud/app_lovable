@@ -12,8 +12,8 @@ def create_app(test_config=None):
         SECRET_KEY='dev', # Cámbiala por un valor aleatorio en producción (usaremos variables de entorno)
         # Define la ruta a la carpeta de plantillas
         TEMPLATES_PATH=os.path.join(app.root_path, '..', 'templates'),
-        # Define la ruta a la carpeta de salida (usaremos el disco persistente de Render)
-        OUTPUT_DOCS_PATH='/var/data/generated_docs' # Esta es la ruta estándar para Discos de Render
+            # # Define la ruta a la carpeta de salida (usaremos el disco persistente de Render)
+            # OUTPUT_DOCS_PATH='/var/data/generated_docs' # Esta es la ruta estándar para Discos de Render
     )
 
     if test_config is None:

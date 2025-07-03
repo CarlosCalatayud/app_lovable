@@ -274,6 +274,37 @@ def delete_usuario(conn, usuario_id):
     return _execute_update_delete(conn, "DELETE FROM Usuarios WHERE id = ?", (usuario_id,))
 
 # ... (Repite el patrón para Promotores, Instaladores, etc.) ...
+# --- Promotores ---
+def add_promotor(conn, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
+    sql = "INSERT INTO Promotores (nombre_razon_social, apellidos, direccion_fiscal, dni_cif) VALUES (?, ?, ?, ?)"
+    return _execute_insert(conn, sql, (nombre_razon_social, apellidos, direccion_fiscal, dni_cif))
+def get_all_promotores(conn):
+    return _execute_select(conn, "SELECT * FROM Promotores ORDER BY nombre_razon_social, apellidos")
+def update_promotor(conn, promotor_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
+    sql = "UPDATE Promotores SET nombre_razon_social = ?, apellidos = ?, direccion_fiscal = ?, dni_cif = ? WHERE id = ?"
+    return _execute_update_delete(conn, sql, (nombre_razon_social, apellidos, direccion_fiscal, dni_cif, promotor_id))
+def delete_promotor(conn, promotor_id):
+    # Primero, comprobar dependencias
+    count = _execute_select(conn, "SELECT COUNT(*) as c FROM Instalaciones WHERE promotor_id = ?", (promotor_id,), one=True)
+    if count and count['c'] > 0:
+        return False, "El promotor está asignado a una o más instalaciones y no puede ser eliminado."
+    return _execute_update_delete(conn, "DELETE FROM Promotores WHERE id = ?", (promotor_id,))
+
+# --- Instaladores ---
+def add_instalador(conn, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico):
+    sql = "INSERT INTO Instaladores (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico) VALUES (?, ?, ?, ?, ?)"
+    return _execute_insert(conn, sql, (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico))
+def get_all_instaladores(conn):
+    return _execute_select(conn, "SELECT * FROM Instaladores ORDER BY nombre_empresa")
+def update_instalador(conn, instalador_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico):
+    sql = "UPDATE Instaladores SET nombre_empresa = ?, direccion_empresa = ?, cif_empresa = ?, nombre_tecnico = ?, competencia_tecnico = ? WHERE id = ?"
+    return _execute_update_delete(conn, sql, (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico, instalador_id))
+def delete_instalador(conn, instalador_id):
+    # Primero, comprobar dependencias
+    count = _execute_select(conn, "SELECT COUNT(*) as c FROM Instalaciones WHERE instalador_id = ?", (instalador_id,), one=True)
+    if count and count['c'] > 0:
+        return False, "El instalador está asignado a una o más instalaciones y no puede ser eliminado."
+    return _execute_update_delete(conn, "DELETE FROM Instaladores WHERE id = ?", (instalador_id,))
 
 # --- Instalaciones ---
 def add_instalacion(conn, descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_dict):
@@ -325,6 +356,83 @@ def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
     return _execute_select(conn, sql.replace('?','%s')) # Reemplazo manual porque no hay params
 
 # ... (El resto de tus funciones CRUD pueden ser adaptadas usando las funciones de ayuda _execute_*)
+# --- Inversores ---
+def add_inversor(conn, data_dict):
+    fields = ['nombre_inversor', 'potencia_salida_va', 'largo_inversor_mm', 'ancho_inversor_mm',
+              'profundo_inversor_mm', 'peso_inversor_kg', 'proteccion_ip_inversor',
+              'potencia_max_paneles_w', 'tension_max_entrada_v', 'secciones_ca_recomendado_mm2',
+              'monofasico_trifasico', 'corriente_maxima_salida_a', 'magnetotermico_a']
+    placeholders = ', '.join(['?'] * len(fields))
+    columns = ', '.join(fields)
+    values = tuple(data_dict.get(f) for f in fields)
+    sql = f"INSERT INTO Inversores ({columns}) VALUES ({placeholders})"
+    return _execute_insert(conn, sql, values)
+
+def update_inversor(conn, inversor_id, data_dict):
+    fields = ['nombre_inversor', 'potencia_salida_va', 'largo_inversor_mm', 'ancho_inversor_mm',
+              'profundo_inversor_mm', 'peso_inversor_kg', 'proteccion_ip_inversor',
+              'potencia_max_paneles_w', 'tension_max_entrada_v', 'secciones_ca_recomendado_mm2',
+              'monofasico_trifasico', 'corriente_maxima_salida_a', 'magnetotermico_a']
+    set_clause = ', '.join([f"{field} = ?" for field in fields])
+    values = [data_dict.get(f) for f in fields]
+    values.append(inversor_id)
+    sql = f"UPDATE Inversores SET {set_clause} WHERE id = ?"
+    return _execute_update_delete(conn, sql, tuple(values))
+
+# --- PanelesSolares ---
+def add_panel_solar(conn, data_dict):
+    fields = ['nombre_panel', 'potencia_pico_w', 'largo_mm', 'ancho_mm', 'profundidad_mm',
+              'peso_kg', 'eficiencia_panel_porcentaje', 'tension_circuito_abierto_voc',
+              'tecnologia_panel_solar', 'numero_celdas_panel', 'tension_maximo_funcionamiento_v',
+              'corriente_maxima_funcionamiento_a', 'fusible_cc_recomendada_a']
+    placeholders = ', '.join(['?'] * len(fields))
+    columns = ', '.join(fields)
+    values = tuple(data_dict.get(f) for f in fields)
+    sql = f"INSERT INTO PanelesSolares ({columns}) VALUES ({placeholders})"
+    return _execute_insert(conn, sql, values)
+
+def update_panel_solar(conn, panel_id, data_dict):
+    fields = ['nombre_panel', 'potencia_pico_w', 'largo_mm', 'ancho_mm', 'profundidad_mm',
+              'peso_kg', 'eficiencia_panel_porcentaje', 'tension_circuito_abierto_voc',
+              'tecnologia_panel_solar', 'numero_celdas_panel', 'tension_maximo_funcionamiento_v',
+              'corriente_maxima_funcionamiento_a', 'fusible_cc_recomendada_a']
+    set_clause = ', '.join([f"{field} = ?" for field in fields])
+    values = [data_dict.get(f) for f in fields]
+    values.append(panel_id)
+    sql = f"UPDATE PanelesSolares SET {set_clause} WHERE id = ?"
+    return _execute_update_delete(conn, sql, tuple(values))
+
+# --- Contadores ---
+def add_contador(conn, data_dict):
+    nombre = data_dict.get('nombre_contador')
+    sql = "INSERT INTO Contadores (nombre_contador) VALUES (?)"
+    return _execute_insert(conn, sql, (nombre,))
+
+def update_contador(conn, contador_id, data_dict):
+    nombre = data_dict.get('nombre_contador')
+    sql = "UPDATE Contadores SET nombre_contador = ? WHERE id = ?"
+    return _execute_update_delete(conn, sql, (nombre, contador_id))
+
+# --- Baterias ---
+def add_bateria(conn, data_dict):
+    nombre = data_dict.get('nombre_bateria')
+    capacidad = data_dict.get('capacidad_kwh')
+    try:
+        capacidad_float = float(str(capacidad).replace(",", "."))
+    except (ValueError, TypeError):
+        return None, f"Capacidad '{capacidad}' no es un número válido."
+    sql = "INSERT INTO Baterias (nombre_bateria, capacidad_kwh) VALUES (?, ?)"
+    return _execute_insert(conn, sql, (nombre, capacidad_float))
+
+def update_bateria(conn, bateria_id, data_dict):
+    nombre = data_dict.get('nombre_bateria')
+    capacidad = data_dict.get('capacidad_kwh')
+    try:
+        capacidad_float = float(str(capacidad).replace(",", "."))
+    except (ValueError, TypeError):
+        return False, f"Capacidad '{capacidad}' no es un número válido."
+    sql = "UPDATE Baterias SET nombre_bateria = ?, capacidad_kwh = ? WHERE id = ?"
+    return _execute_update_delete(conn, sql, (nombre, capacidad_float, bateria_id))
 
 
 # Punto de entrada para ejecutar la configuración inicial desde la línea de comandos
