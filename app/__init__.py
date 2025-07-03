@@ -1,6 +1,6 @@
 # app/__init__.py
 import os
-from flask import Flask
+from flask import Flask, jsonify
 
 def create_app(test_config=None):
     # Crear e inicializar la app
@@ -9,7 +9,7 @@ def create_app(test_config=None):
     # --- CONFIGURACIÓN ---
     # Una clave secreta es necesaria para sesiones, etc. aunque no las uses explícitamente.
     app.config.from_mapping(
-        SECRET_KEY='dev', # Cámbiala por un valor aleatorio en producción (usaremos variables de entorno)
+        SECRET_KEY=os.environ.get('SECRET_KEY', 'dev'), # Usamos la variable de entorno
         # Define la ruta a la carpeta de plantillas
         TEMPLATES_PATH=os.path.join(app.root_path, '..', 'templates'),
             # # Define la ruta a la carpeta de salida (usaremos el disco persistente de Render)
@@ -42,5 +42,36 @@ def create_app(test_config=None):
     @app.route('/hello')
     def hello():
         return '¡Hola! La API está funcionando.'
+    
+        # #################################################################### #
+    # --- INICIO DE SECCIÓN AÑADIDA: ENDPOINT DE SETUP DE LA BASE DE DATOS ---
+    # #################################################################### #
+    
+    # Importa el módulo de la base de datos aquí dentro para evitar importaciones circulares
+    from . import db
+
+    @app.route('/setup-database/<path:secret_key>')
+    def setup_database_endpoint(secret_key):
+        # Compara la clave de la URL con la variable de entorno
+        expected_key = os.environ.get('SETUP_SECRET_KEY')
+        
+        if not expected_key or secret_key != expected_key:
+            return jsonify({"error": "Clave secreta no válida o no configurada."}), 403 # 403 Forbidden
+
+        try:
+            print("Iniciando setup de la base de datos...")
+            db.create_tables()
+            print("Tablas creadas. Poblando datos iniciales...")
+            db.populate_initial_data()
+            print("Setup de la base de datos completado.")
+            return jsonify({"status": "success", "message": "Base de datos inicializada correctamente."}), 200
+        except Exception as e:
+            # Imprime el error en los logs de Render para depuración
+            app.logger.error(f"Error durante el setup de la base de datos: {e}", exc_info=True)
+            return jsonify({"status": "error", "message": f"Ocurrió un error: {e}"}), 500
+
+    # #################################################################### #
+    # --- FIN DE SECCIÓN AÑADIDA ---
+    # #################################################################### #
 
     return app
