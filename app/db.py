@@ -247,12 +247,20 @@ def _execute_select(conn, sql, params=None, one=False):
         with conn.cursor() as cursor:
             cursor.execute(sql, params or ())
             if one:
-                result = cursor.fetchone()
-                return result if result else None
-            return cursor.fetchall()
+                # Esto está bien, devuelve un objeto o None
+                return cursor.fetchone()
+            else:
+                # Esto también está bien, devuelve una lista de objetos
+                return cursor.fetchall()
     except (Exception, psycopg2.Error, sqlite3.Error) as e:
-        print(f"Error en SELECT: {e}")
-        return None if one else []
+        # AQUÍ ESTÁ EL CAMBIO IMPORTANTE
+        # Usamos print() porque el logger de Flask no está disponible aquí
+        print(f"!!! ERROR EN _execute_select !!! SQL: {sql} | PARAMS: {params} | ERROR: {e}")
+        # Si se esperan múltiples resultados, SIEMPRE devolver una lista vacía en caso de error.
+        if one:
+            return None
+        else:
+            return [] # NUNCA DEVOLVER None, SIEMPRE UNA LISTA VACÍA
 
 # --- usuarios ---
 def add_usuario(conn, nombre, apellidos, dni, direccion):

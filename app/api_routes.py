@@ -517,42 +517,46 @@ CATALOG_TABLE_MAP = {
 
 @bp_api.route('/productos/<string:product_type>', methods=['GET'])
 def get_all_products_by_type(product_type):
-    # --- 1. VALIDACIÓN Y CONFIGURACIÓN (LA PARTE QUE FALTABA) ---
     if product_type not in PRODUCT_TABLE_MAP:
-        current_app.logger.error(f"PRODUCT_TABLE_MAP no contiene la clave: {product_type}")
         return jsonify({'error': f'Tipo de producto no válido: {product_type}'}), 404
     
     config = PRODUCT_TABLE_MAP[product_type]
     table_name = config.get("table")
-    order_by = config.get("order_by", "id") # Usamos 'id' como valor por defecto
+    order_by = config.get("order_by", "id")
 
     if not table_name:
-        current_app.logger.error(f"Configuración para product_type '{product_type}' no tiene 'table'.")
         return jsonify({'error': f'Configuración interna errónea para {product_type}'}), 500
     
-    # --- 2. EJECUCIÓN DE LA CONSULTA ---
-    conn = None
-    try:
-        conn = get_db_connection()
-        items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
-        
-        # --- LOGGING ---
-        current_app.logger.info(f"Obtenidos {len(items)} items para el producto tipo '{product_type}'.")
-        # No es necesario imprimir todos los items en producción, pero es útil para depurar.
-        # if items:
-        #     current_app.logger.info(f"Datos: {items}")
-        
-        return jsonify(items)
+    conn = get_db_connection()
+    # Ahora estamos seguros de que 'items' será una lista
+    items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
+    conn.close()
 
-    except ValueError as ve: # Captura errores de validación de get_all_from_table
-        current_app.logger.error(f"Error de valor en get_all_products_by_type para {product_type}: {ve}", exc_info=True)
-        return jsonify({'error': str(ve)}), 400
-    except Exception as e:
-        current_app.logger.error(f"Error en API get_all_products_by_type para {product_type}: {e}", exc_info=True)
-        return jsonify({'error': f'Error interno al obtener {product_type}'}), 500
-    finally:
-        if conn: 
-            conn.close()
+    # El logging ahora es seguro porque 'items' es una lista
+    current_app.logger.info(f"Obtenidos {len(items)} items para el producto tipo '{product_type}'.")
+    
+    return jsonify(items)
+
+@bp_api.route('/catalogos/<string:catalog_name>', methods=['GET'])
+def get_catalog_data(catalog_name):
+    if catalog_name not in CATALOG_TABLE_MAP:
+        return jsonify({'error': f'Catálogo no válido: {catalog_name}'}), 404
+
+    config = CATALOG_TABLE_MAP[catalog_name]
+    table_name = config.get("table")
+    order_by = config.get("order_by", "id")
+
+    if not table_name:
+        return jsonify({'error': f'Configuración interna errónea para {catalog_name}'}), 500
+
+    conn = get_db_connection()
+    # 'items' siempre será una lista
+    items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
+    conn.close()
+    
+    current_app.logger.info(f"Obtenidos {len(items)} items para el catálogo '{catalog_name}'.")
+
+    return jsonify(items)
 
 
 @bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['GET'])
@@ -636,41 +640,3 @@ def delete_product(product_type, item_id):
     return jsonify({'error': message}), 400
 
 # ... (Implementar GET by ID, PUT, DELETE para Usuarios) ...
-
-
-
-@bp_api.route('/catalogos/<string:catalog_name>', methods=['GET'])
-def get_catalog_data(catalog_name):
-    # --- 1. VALIDACIÓN Y CONFIGURACIÓN ---
-    if catalog_name not in CATALOG_TABLE_MAP:
-        current_app.logger.error(f"CATALOG_TABLE_MAP no contiene la clave: {catalog_name}")
-        return jsonify({'error': f'Catálogo no válido: {catalog_name}'}), 404
-
-    config = CATALOG_TABLE_MAP[catalog_name]
-    table_name = config.get("table")
-    order_by = config.get("order_by", "id")
-
-    if not table_name:
-        current_app.logger.error(f"Configuración para catalog_name '{catalog_name}' no tiene 'table'.")
-        return jsonify({'error': f'Configuración interna errónea para {catalog_name}'}), 500
-
-    # --- 2. EJECUCIÓN DE LA CONSULTA ---
-    conn = None
-    try:
-        conn = get_db_connection()
-        items = database.get_all_from_table(conn, table_name, order_by_column=order_by)
-        
-        # --- LOGGING ---
-        current_app.logger.info(f"Obtenidos {len(items)} items para el catálogo '{catalog_name}'.")
-
-        return jsonify(items)
-        
-    except ValueError as ve:
-        current_app.logger.error(f"Error de valor en get_catalog_data para {catalog_name}: {ve}", exc_info=True)
-        return jsonify({'error': str(ve)}), 400
-    except Exception as e:
-        current_app.logger.error(f"Error en API get_catalog_data para {catalog_name}: {e}", exc_info=True)
-        return jsonify({'error': f'Error interno al obtener {catalog_name}'}), 500
-    finally:
-        if conn: 
-            conn.close()
