@@ -2,7 +2,7 @@
 from flask import Blueprint, jsonify, request, current_app, send_file, make_response
 import json # Para manejar los datos técnicos
 from . import db as database # Importa el módulo y le da el alias 'database'
-from .calc import calculations
+from . import calc as calculations # Importa el módulo de cálculos
 from .generation import doc_generator
 import os
 import io # Para trabajar con bytes en memoria
