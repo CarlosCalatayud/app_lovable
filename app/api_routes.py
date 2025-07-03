@@ -359,16 +359,36 @@ def delete_usuario_api(user_id): # Renombrado
 @bp_api.route('/promotores', methods=['POST'])
 def create_promotor():
     data = request.json
+    # Validación básica de datos
+    if not data or not data.get('nombre_razon_social') or not data.get('dni_cif'):
+        return jsonify({'error': 'Faltan campos obligatorios: nombre_razon_social y dni_cif'}), 400
+
     conn = get_db_connection()
-    promotor_id = database.add_promotor(conn,
-                                        data.get('nombre_razon_social'),
-                                        data.get('apellidos'),
-                                        data.get('direccion_fiscal'),
-                                        data.get('dni_cif'))
-    conn.close()
-    if promotor_id:
-        return jsonify({'id': promotor_id, 'message': 'Promotor creado'}), 201
-    return jsonify({'error': 'Error al crear promotor o DNI/CIF duplicado'}), 400
+    try:
+        # La función add_promotor ahora devuelve (id, mensaje) o (None, mensaje_error)
+        new_id, message = database.add_promotor(conn,
+                                            data.get('nombre_razon_social'),
+                                            data.get('apellidos'),
+                                            data.get('direccion_fiscal'),
+                                            data.get('dni_cif'))
+        
+        # Si new_id no es None, la inserción fue exitosa
+        if new_id is not None:
+            current_app.logger.info(f"Promotor creado con ID: {new_id}")
+            return jsonify({'id': new_id, 'message': message}), 201
+        else:
+            # Si new_id es None, hubo un error que la capa de BD ya capturó
+            current_app.logger.error(f"Error al crear promotor. Mensaje de BD: {message}")
+            # Devolvemos un error 400 (Bad Request) o 409 (Conflict) si es DNI duplicado
+            error_code = 409 if "UNIQUE constraint" in str(message) or "ya existe" in str(message) else 400
+            return jsonify({'error': message}), error_code
+
+    except Exception as e:
+        current_app.logger.error(f"Excepción no controlada en create_promotor: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn:
+            conn.close()
 
 @bp_api.route('/promotores', methods=['GET'])
 def get_promotores():

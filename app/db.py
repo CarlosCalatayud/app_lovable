@@ -278,6 +278,9 @@ def delete_usuario(conn, usuario_id):
 def add_promotor(conn, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
     sql = "INSERT INTO promotores (nombre_razon_social, apellidos, direccion_fiscal, dni_cif) VALUES (?, ?, ?, ?)"
     return _execute_insert(conn, sql, (nombre_razon_social, apellidos, direccion_fiscal, dni_cif))
+def get_promotor_by_id(conn, promotor_id):
+    # Y esta...
+    return _execute_select(conn, "SELECT * FROM promotores WHERE id = ?", (promotor_id,), one=True)
 def get_all_promotores(conn):
     return _execute_select(conn, "SELECT * FROM promotores ORDER BY nombre_razon_social, apellidos")
 def update_promotor(conn, promotor_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
