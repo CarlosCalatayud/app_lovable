@@ -201,16 +201,16 @@ def _execute_insert(conn, sql, params):
         sql += " RETURNING id"
 
     try:
-        with conn.cursor() as cursor:
-            cursor.execute(sql, params)
-            if db_type == 'postgres':
-                new_id = cursor.fetchone()['id']
-            else: # SQLite
-                new_id = cursor.lastrowid
-            conn.commit()
-            return new_id, "Creado correctamente."
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        if db_type == 'postgres':
+            new_id = cursor.fetchone()['id']
+        else: # SQLite
+            new_id = cursor.lastrowid
+        # conn.commit()
+        conn.commit()
+        return new_id, "Creado correctamente."
     except (psycopg2.IntegrityError, sqlite3.IntegrityError) as e:
-        conn.rollback()
         return None, f"Error de integridad: El registro ya existe o viola una restricción. ({e})"
     except (Exception, psycopg2.Error, sqlite3.Error) as e:
         conn.rollback()

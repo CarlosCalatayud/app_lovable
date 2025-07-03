@@ -436,17 +436,37 @@ def delete_promotor_api(promotor_id):
 @bp_api.route('/instaladores', methods=['POST'])
 def create_instalador():
     data = request.json
-    conn = get_db_connection()
-    instalador_id = database.add_instalador(conn,
+    if not data or not data.get('nombre_empresa') or not data.get('cif_empresa'):
+        return jsonify({'error': 'Faltan campos obligatorios: nombre_empresa y cif_empresa'}), 400
+
+    conn = None # Inicializamos a None
+    try:
+        conn = get_db_connection()
+        new_id, message = database.add_instalador(conn,
                                             data.get('nombre_empresa'),
                                             data.get('direccion_empresa'),
                                             data.get('cif_empresa'),
                                             data.get('nombre_tecnico'),
                                             data.get('competencia_tecnico'))
-    conn.close()
-    if instalador_id:
-        return jsonify({'id': instalador_id, 'message': 'Instalador creado'}), 201
-    return jsonify({'error': 'Error al crear instalador o CIF duplicado'}), 400
+        
+        if new_id is not None:
+            conn.commit() # <--- COMMIT EXPLÍCITO Y FINAL
+            current_app.logger.info(f"Instalador creado con ID: {new_id}. COMMIT realizado.")
+            return jsonify({'id': new_id, 'message': message}), 201
+        else:
+            conn.rollback() # <--- ROLLBACK si la función de DB falla
+            current_app.logger.error(f"Error al crear instalador, haciendo ROLLBACK. Mensaje: {message}")
+            error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
+            return jsonify({'error': message}), error_code
+
+    except Exception as e:
+        if conn:
+            conn.rollback() # Rollback en caso de excepción inesperada
+        current_app.logger.error(f"Excepción en create_instalador, haciendo ROLLBACK: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn:
+            conn.close()
 
 @bp_api.route('/instaladores', methods=['GET'])
 def get_instaladores():
