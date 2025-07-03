@@ -350,6 +350,16 @@ def update_instalacion(conn, instalacion_id, descripcion, usuario_id, promotor_i
     """
     return _execute_update_delete(conn, sql, (descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_str, instalacion_id))
 
+def get_all_instalaciones(conn):
+    """
+    Obtiene una lista simplificada de todas las instalaciones para la vista principal.
+    """
+    # Usamos nuestra función de ayuda _execute_select
+    # Asegúrate de que los nombres de tablas y columnas estén en minúsculas.
+    sql = "SELECT id, descripcion, fecha_creacion FROM instalaciones ORDER BY fecha_creacion DESC"
+    return _execute_select(conn, sql)
+
+
 def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
     # Añade validaciones robustas aquí si es necesario
     sql = f"SELECT {columns} FROM {table_name} ORDER BY {order_by_column}"
