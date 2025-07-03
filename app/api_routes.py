@@ -471,17 +471,18 @@ def delete_instalador_api(instalador_id):
     return jsonify({'error': message}), 400
 
 # --- MAPAS DE CONFIGURACIÓN PARA PRODUCTOS Y CATÁLOGOS ---
+# DESPUÉS - CORRECTO
 PRODUCT_TABLE_MAP = {
-    "inversores": {"table": "Inversores", "order_by": "nombre_inversor", "add_func": database.add_inversor, "update_func": database.update_inversor},
-    "paneles": {"table": "PanelesSolares", "order_by": "nombre_panel", "add_func": database.add_panel_solar, "update_func": database.update_panel_solar},
-    "contadores": {"table": "Contadores", "order_by": "nombre_contador", "add_func": database.add_contador, "update_func": database.update_contador},
-    "baterias": {"table": "Baterias", "order_by": "nombre_bateria", "add_func": database.add_bateria, "update_func": database.update_bateria},
+    "inversores": {"table": "inversores", "order_by": "nombre_inversor", "add_func": database.add_inversor, "update_func": database.update_inversor},
+    "paneles": {"table": "paneles_solares", "order_by": "nombre_panel", "add_func": database.add_panel_solar, "update_func": database.update_panel_solar},
+    "contadores": {"table": "contadores", "order_by": "nombre_contador", "add_func": database.add_contador, "update_func": database.update_contador},
+    "baterias": {"table": "baterias", "order_by": "nombre_bateria", "add_func": database.add_bateria, "update_func": database.update_bateria},
 }
 
 CATALOG_TABLE_MAP = {
-    "tipos_vias": {"table": "TiposVias", "order_by": "nombre_tipo_via"},
-    "distribuidoras": {"table": "Distribuidoras", "order_by": "nombre_distribuidora"},
-    "categorias_instalador": {"table": "CategoriasInstalador", "order_by": "nombre_categoria"}
+    "tipos_vias": {"table": "tipos_vias", "order_by": "nombre_tipo_via"},
+    "distribuidoras": {"table": "distribuidoras", "order_by": "nombre_distribuidora"},
+    "categorias_instalador": {"table": "categorias_instalador", "order_by": "nombre_categoria"}
 }
 
 
@@ -599,45 +600,8 @@ def delete_product(product_type, item_id):
     return jsonify({'error': message}), 400
 
 # ... (Implementar GET by ID, PUT, DELETE para Usuarios) ...
-# ... (Implementar CRUD completo para Promotores, Instaladores, y cada tipo de Producto Técnico) ...
-# Ejemplo para get_all_db_inversores:
-@bp_api.route('/productos/inversores', methods=['GET'])
-def get_inversores(): # Esta es la función que está dando error
-    conn = None
-    try:
-        conn = get_db_connection()
-        # Pasa "Inversores" (con I mayúscula)
-        inversores = database.get_all_from_table(conn, "Inversores", order_by_column="nombre_inversor")
-        return jsonify(inversores)
-    except ValueError as ve:
-        current_app.logger.error(f"ValueError en get_inversores: {ve}", exc_info=True)
-        return jsonify({'error': str(ve)}), 400
-    except Exception as e:
-        current_app.logger.error(f"Error en get_inversores: {e}", exc_info=True)
-        return jsonify({'error': 'Error interno al obtener inversores'}), 500
-    finally:
-        if conn:
-            conn.close()
 
-# Necesitarás endpoints para todos los catálogos (TiposVias, Distribuidoras, etc.)
-# que se usan en los comboboxes de la GUI original.
-@bp_api.route('/catalogos/tipos_vias', methods=['GET'])
-def get_tipos_vias(): # Esta es la función que está dando error
-    conn = None
-    try:
-        conn = get_db_connection()
-        # Pasa "TiposVias" (con T y V mayúsculas)
-        tipos = database.get_all_from_table(conn, "TiposVias", order_by_column="nombre_tipo_via")
-        return jsonify(tipos)
-    except ValueError as ve:
-        current_app.logger.error(f"ValueError en get_tipos_vias: {ve}", exc_info=True)
-        return jsonify({'error': str(ve)}), 400
-    except Exception as e:
-        current_app.logger.error(f"Error en get_tipos_vias: {e}", exc_info=True)
-        return jsonify({'error': 'Error interno al obtener tipos de vía'}), 500
-    finally:
-        if conn:
-            conn.close()
+
 
 @bp_api.route('/catalogos/<string:catalog_name>', methods=['GET'])
 def get_catalog_data(catalog_name):

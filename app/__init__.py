@@ -43,35 +43,6 @@ def create_app(test_config=None):
     def hello():
         return '¡Hola! La API está funcionando.'
     
-        # #################################################################### #
-    # --- INICIO DE SECCIÓN AÑADIDA: ENDPOINT DE SETUP DE LA BASE DE DATOS ---
-    # #################################################################### #
-    
-    # Importa el módulo de la base de datos aquí dentro para evitar importaciones circulares
-    from . import db
 
-    @app.route('/setup-database/<path:secret_key>')
-    def setup_database_endpoint(secret_key):
-        # Compara la clave de la URL con la variable de entorno
-        expected_key = os.environ.get('SETUP_SECRET_KEY')
-        
-        if not expected_key or secret_key != expected_key:
-            return jsonify({"error": "Clave secreta no válida o no configurada."}), 403 # 403 Forbidden
-
-        try:
-            print("Iniciando setup de la base de datos...")
-            db.create_tables()
-            print("Tablas creadas. Poblando datos iniciales...")
-            db.populate_initial_data()
-            print("Setup de la base de datos completado.")
-            return jsonify({"status": "success", "message": "Base de datos inicializada correctamente."}), 200
-        except Exception as e:
-            # Imprime el error en los logs de Render para depuración
-            app.logger.error(f"Error durante el setup de la base de datos: {e}", exc_info=True)
-            return jsonify({"status": "error", "message": f"Ocurrió un error: {e}"}), 500
-
-    # #################################################################### #
-    # --- FIN DE SECCIÓN AÑADIDA ---
-    # #################################################################### #
 
     return app

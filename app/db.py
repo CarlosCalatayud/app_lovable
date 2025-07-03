@@ -361,10 +361,9 @@ def get_all_instalaciones(conn):
 
 
 def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
-    # Añade validaciones robustas aquí si es necesario
-    sql = f"SELECT {columns} FROM {table_name} ORDER BY {order_by_column}"
-    return _execute_select(conn, sql.replace('?','%s')) # Reemplazo manual porque no hay params
-
+    VALID_TABLES = ["inversores", "paneles_solares", "contadores", "baterias", "tipos_vias", "distribuidoras", "categorias_instalador", "usuarios", "promotores", "instaladores", "tipos_finca"] # Añadí tipos_finca
+    if table_name not in VALID_TABLES:
+        raise ValueError(f"Tabla no permitida: {table_name}")
 # ... (El resto de tus funciones CRUD pueden ser adaptadas usando las funciones de ayuda _execute_*)
 # --- inversores ---
 def add_inversor(conn, data_dict):
