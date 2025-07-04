@@ -188,6 +188,8 @@ def generate_selected_docs_api(instalacion_id):
 
     if not selected_template_files:
         return jsonify({"error": "No se seleccionaron documentos para generar."}), 400
+    
+    conn = None # Inicializamos fuera del try para que exista en el finally
 
     try:
         conn = get_db_connection()
@@ -217,23 +219,17 @@ def generate_selected_docs_api(instalacion_id):
         contexto_final.update(contexto_calculado)
 
 
-        # 2. Añadimos los datos de la instalación, del usuario, promotor e instalador
-        # con los nombres de clave exactos que usa la plantilla de Word.
+        # --- INICIO DE LA SOLUCIÓN AL TypeError ---
+        # Creamos una copia del contexto solo para el logging, para no modificar el original.
+        contexto_para_log = contexto_final.copy()
+        # Buscamos claves que puedan contener objetos datetime y las convertimos a string.
+        for key, value in contexto_para_log.items():
+            if hasattr(value, 'isoformat'):  # Detecta objetos date/datetime
+                contexto_para_log[key] = value.isoformat()
         
-        
-        # 3. Obtenemos los datos completos de los equipos seleccionados
-        # (Esto requiere nuevas llamadas a la base de datos)
-        
- 
-
-        # 4. Realizamos los cálculos y los añadimos al contexto
-        # El módulo de cálculos ahora recibe este contexto plano y lo enriquece
-        contexto_calculado = calculations.calculate_all_derived_data(contexto_final.copy(), conn)
-        contexto_final.update(contexto_calculado)
-        
-        # A este punto, 'contexto_plano' es el diccionario final y plano para la plantilla
-        current_app.logger.info(f"Contexto final para plantilla: {json.dumps(contexto_final, indent=2)}")
-
+        # Ahora el logging es seguro porque no hay objetos datetime.
+        current_app.logger.info(f"Contexto final para plantilla: {json.dumps(contexto_para_log, indent=2)}")
+        # --- FIN DE LA SOLUCIÓN ---
 
         # --- AHORA VIENE EL CAMBIO ---
 
