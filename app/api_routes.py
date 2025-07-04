@@ -220,15 +220,26 @@ def generate_selected_docs_api(instalacion_id):
 
 
         # --- INICIO DE LA SOLUCIÓN AL TypeError ---
+        from decimal import Decimal # Asegúrate de importar Decimal al principio del archivo
         # Creamos una copia del contexto solo para el logging, para no modificar el original.
         contexto_para_log = contexto_final.copy()
         # Buscamos claves que puedan contener objetos datetime y las convertimos a string.
         for key, value in contexto_para_log.items():
             if hasattr(value, 'isoformat'):  # Detecta objetos date/datetime
                 contexto_para_log[key] = value.isoformat()
+            elif isinstance(value, Decimal): # Detecta objetos Decimal
+                # Convertimos Decimal a float para que sea serializable.
+                # float() es suficiente para logging.
+                contexto_para_log[key] = float(value)
         
         # Ahora el logging es seguro porque no hay objetos datetime.
-        current_app.logger.info(f"Contexto final para plantilla: {json.dumps(contexto_para_log, indent=2)}")
+        # Ahora el logging es seguro contra datetime y decimal.
+        try:
+            current_app.logger.info(f"Contexto final para plantilla: {json.dumps(contexto_para_log, indent=2)}")
+        except TypeError as e:
+            current_app.logger.error(f"Aún hay un error de serialización en el log: {e}")
+            # Imprimimos el contexto original para ver qué tipo de dato se nos escapó
+            current_app.logger.info(f"Contexto original problemático: {contexto_final}")
         # --- FIN DE LA SOLUCIÓN ---
 
         # --- AHORA VIENE EL CAMBIO ---
