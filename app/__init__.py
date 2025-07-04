@@ -14,7 +14,7 @@ def create_app(test_config=None):
     # Una clave secreta para la app de Flask y la ruta a las plantillas
     app.config.from_mapping(
         SECRET_KEY=os.environ.get('SECRET_KEY', 'dev'),
-        TEMPLATES_PATH=os.path.join(app.root_path, '..', 'plantillas_docs')
+        TEMPLATES_PATH=os.path.join(app.root_path, '..', 'templates')
     )
 
     if test_config is not None:
