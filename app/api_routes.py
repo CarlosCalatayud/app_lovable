@@ -65,6 +65,15 @@ def create_instalacion():
 def update_instalacion_endpoint(instalacion_id):
     data = request.json # 'data' es un diccionario plano
     conn = None
+        # --- LOGGING DE DEPURACIÓN AÑADIDO ---
+    current_app.logger.info(f"Recibida petición PUT para ID {instalacion_id}.")
+    current_app.logger.info(f"BODY RECIBIDO: {json.dumps(data, indent=2)}")
+    # ------------------------------------
+
+    # Validación básica
+    if not data:
+        return jsonify({'error': 'No se recibieron datos en el cuerpo de la petición'}), 400
+
     try:
         conn = get_db_connection()
         # Pasamos el diccionario completo
