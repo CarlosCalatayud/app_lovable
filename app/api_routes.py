@@ -38,51 +38,44 @@ def get_instalacion_detalle(instalacion_id):
 
 @bp_api.route('/instalaciones', methods=['POST'])
 def create_instalacion():
-    data = request.json
-    # Extraer datos del request.json
-    # Tu gui.py serializaba 'datos_tecnicos' como JSON. El frontend enviará un dict.
-    # database.add_instalacion espera datos_tecnicos como un dict.
-    descripcion = data.get('descripcion')
-    usuario_id = data.get('usuario_id')
-    promotor_id = data.get('promotor_id')
-    instalador_id = data.get('instalador_id')
-    datos_tecnicos = data.get('datos_tecnicos', {}) # datos_tecnicos es un dict
+    data = request.json # 'data' es ahora un diccionario plano
+    if not data or not data.get('descripcion'):
+        return jsonify({'error': 'Falta la descripción del proyecto'}), 400
 
-    conn = get_db_connection()
-    new_id = database.add_instalacion(conn, descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos)
-    conn.close()
-
+    conn = None
+    try:
+        conn = get_db_connection()
+        # Pasamos el diccionario completo a la función de la DB
+        new_id, message = database.add_instalacion(conn, data)
+        
+        if new_id is not None:
+            conn.commit()
+            return jsonify({'id': new_id, 'message': message}), 201
+        else:
+            conn.rollback()
+            return jsonify({'error': message}), 400
+    except Exception as e:
+        if conn: 
+            conn.rollback() 
     if new_id:
         return jsonify({'id': new_id, 'message': 'Instalación creada'}), 201
     return jsonify({'error': 'Error al crear instalación'}), 400
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['PUT'])
 def update_instalacion_endpoint(instalacion_id):
-    data = request.json
-    current_app.logger.info(f"Recibida petición PUT para actualizar instalación ID: {instalacion_id} con datos: {data}")
-
-    conn = get_db_connection()
+    data = request.json # 'data' es un diccionario plano
+    conn = None
     try:
-        # La función database.update_instalacion devuelve (True/False, "mensaje")
-        success, message = database.update_instalacion(
-            conn,
-            instalacion_id,
-            data.get('descripcion'),
-            data.get('usuario_id'),
-            data.get('promotor_id'),
-            data.get('instalador_id'),
-            data.get('datos_tecnicos', {}) # Asegurar que datos_tecnicos es un dict
-        )
-        conn.commit() # Importante: commit después de la operación de escritura
+        conn = get_db_connection()
+        # Pasamos el diccionario completo
+        success, message = database.update_instalacion(conn, instalacion_id, data)
         
         if success:
-            current_app.logger.info(f"Instalación ID {instalacion_id} actualizada: {message}")
+            conn.commit()
             return jsonify({'message': message}), 200
         else:
-            current_app.logger.warning(f"Fallo al actualizar instalación ID {instalacion_id}: {message}")
-            # Si 'message' ya indica la razón (ej. "no encontrado"), usarlo.
-            # Podrías devolver 404 si 'no encontrado' es una posibilidad.
-            return jsonify({'error': message or 'Error al actualizar la instalación o no se encontraron cambios.'}), 400 
+            conn.rollback()
+            return jsonify({'error': message}), 400
     except Exception as e:
         if conn: # Si la conexión aún está abierta y hay un error, hacer rollback
             conn.rollback()
@@ -193,19 +186,25 @@ def generate_selected_docs_api(instalacion_id):
         if not instalacion_completa:
             return jsonify({"error": "Instalación no encontrada"}), 404
 
-        # 1. Empezamos con los datos técnicos que ya son un dict plano
-        contexto_plano = instalacion_completa.get('datos_tecnicos', {})
+        contexto_final = dict(instalacion_completa) # Creamos una copia
+        
+        # Obtener y fusionar datos de equipos
+        nombre_panel = contexto_final.get('panel_solar')
+        if nombre_panel:
+            panel_data = database.get_panel_by_name(conn, nombre_panel)
+            if panel_data: contexto_final.update(panel_data)
 
-        contexto_plano.update({
-            'usuarioNombre': instalacion_completa.get('promotor_nombre', ''),
-            'usuarioDireccion': instalacion_completa.get('promotor_direccion', ''),
-            'usuarioDni': instalacion_completa.get('promotor_cif', ''),
-            'instaladorEmpresa': instalacion_completa.get('instalador_empresa', ''),
-            'instaladorDireccion': instalacion_completa.get('instalador_direccion', ''),
-            'instaladorCif': instalacion_completa.get('instalador_cif', ''),
-            'instaladorTecnicoNombre': instalacion_completa.get('instalador_tecnico_nombre', ''),
-            'instaladorTecnicoCompetencia': instalacion_completa.get('instalador_tecnico_competencia', '')
-        })
+        if nombre_inversor:
+            inversor_data = database.get_inversor_by_name(conn, nombre_inversor)
+            if inversor_data: contexto_final.update(inversor_data)
+
+        if nombre_bateria:
+            bateria_data = database.get_inversor_by_name(conn, nombre_bateria)
+            if bateria_data: contexto_final.update(bateria_data)
+
+        contexto_calculado = calculations.calculate_all_derived_data(contexto_final.copy(), conn)
+        contexto_final.update(contexto_calculado)
+
 
         # 2. Añadimos los datos de la instalación, del usuario, promotor e instalador
         # con los nombres de clave exactos que usa la plantilla de Word.
@@ -214,31 +213,29 @@ def generate_selected_docs_api(instalacion_id):
         # 3. Obtenemos los datos completos de los equipos seleccionados
         # (Esto requiere nuevas llamadas a la base de datos)
         
-        nombre_panel = contexto_plano.get('panel_solar')
+        nombre_panel = contexto_final.get('panel_solar')
         if nombre_panel:
             panel_data = database.get_panel_by_name(conn, nombre_panel)
-            if panel_data: contexto_plano.update(panel_data)
+            if panel_data: contexto_final.update(panel_data)
 
-        nombre_inversor = contexto_plano.get('inversor')
+        nombre_inversor = contexto_final.get('inversor')
         if nombre_inversor:
             inversor_data = database.get_inversor_by_name(conn, nombre_inversor)
-            if inversor_data: contexto_plano.update(inversor_data)
+            if inversor_data: contexto_final.update(inversor_data)
         
-        nombre_bateria = contexto_plano.get('bateria')
+        nombre_bateria = contexto_final.get('bateria')
         if nombre_bateria:
              bateria_data = database.get_bateria_by_name(conn, nombre_bateria)
-             if bateria_data: contexto_plano.update(bateria_data)
+             if bateria_data: contexto_final.update(bateria_data)
 
         # 4. Realizamos los cálculos y los añadimos al contexto
         # El módulo de cálculos ahora recibe este contexto plano y lo enriquece
-        contexto_calculado = calculations.calculate_all_derived_data(contexto_plano.copy(), conn)
-        contexto_plano.update(contexto_calculado)
+        contexto_calculado = calculations.calculate_all_derived_data(contexto_final.copy(), conn)
+        contexto_final.update(contexto_calculado)
         
         # A este punto, 'contexto_plano' es el diccionario final y plano para la plantilla
-        current_app.logger.info(f"Contexto final para plantilla: {json.dumps(contexto_plano, indent=2)}")
+        current_app.logger.info(f"Contexto final para plantilla: {json.dumps(contexto_final, indent=2)}")
 
-        # 5. Pasamos el contexto plano y final a la plantilla
-        final_context_para_plantilla = contexto_plano
 
         # --- AHORA VIENE EL CAMBIO ---
 
@@ -248,10 +245,10 @@ def generate_selected_docs_api(instalacion_id):
         # Mapa de plantillas
         available_templates_map = {
             "MEMORIA TECNICA.docx": "Memoria Tecnica Instalacion {}.docx",
-            "DECLARACION RESPONSABLE.docx": "Memoria Tecnica Instalacion {}.docx",
-            "ESTUDIO BASICO SEG Y SALUD.docx": "Memoria Tecnica Instalacion {}.docx",
-            "GESTION RESIDUOS.docx": "Memoria Tecnica Instalacion {}.docx",
-            "Plan de Control de Calidad.docx": "Memoria Tecnica Instalacion {}.docx",
+            "DECLARACION RESPONSABLE.docx": "Declaracion de responsable {}.docx",
+            "ESTUDIO BASICO SEG Y SALUD.docx": "Estudio Básico Seguridad y Salud {}.docx",
+            "GESTION RESIDUOS.docx": "Gestion de Residuos{}.docx",
+            "PLAN DE CONTROL DE CALIDAD.docx": "Plan de Control de Calidad {}.docx",
             "CERTIFICADO FIN DE OBRA.docx": "Certificado Fin Obra Instalacion {}.docx",
         }
         
@@ -272,7 +269,7 @@ def generate_selected_docs_api(instalacion_id):
                 # Para esto, necesitamos una pequeña modificación en doc_generator.py (ver abajo)
                 # O podemos hacer el truco aquí mismo:
                 doc = doc_generator.DocxTemplate(template_path)
-                doc.render(contexto_plano) # Renderizamos el contexto limpio
+                doc.render(contexto_final) # Renderizamos el contexto limpio
                 doc.save(file_stream) # Guardamos en el buffer de memoria
                 file_stream.seek(0) # Rebobinamos el buffer para poder leerlo
 

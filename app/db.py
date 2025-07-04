@@ -87,7 +87,31 @@ def create_tables():
             usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
             promotor_id INTEGER REFERENCES promotores(id) ON DELETE SET NULL,
             instalador_id INTEGER REFERENCES instaladores(id) ON DELETE SET NULL,
-            datos_tecnicos_json {'JSONB' if db_type == 'postgres' else 'TEXT'}
+            
+            -- INICIO DE NUEVAS COLUMNAS PARA DATOS TÉCNICOS --
+            direccion_emplazamiento TEXT,
+            tipo_via TEXT,
+            nombre_via TEXT,
+            numero_via TEXT,
+            piso_puerta TEXT,
+            codigo_postal TEXT,
+            localidad TEXT,
+            provincia TEXT,
+            referencia_catastral TEXT,
+            tipo_finca TEXT,
+            panel_solar TEXT,
+            numero_paneles INTEGER,
+            inversor TEXT,
+            numero_inversores INTEGER,
+            bateria TEXT,
+            numero_baterias INTEGER,
+            distribuidora TEXT,
+            cups TEXT,
+            potencia_contratada_w INTEGER
+            -- FIN DE NUEVAS COLUMNAS --
+            
+            -- ELIMINAMOS la columna de JSON:
+            -- datos_tecnicos_json {'JSONB' if db_type == 'postgres' else 'TEXT'}
         )''',
         '''CREATE TABLE IF NOT EXISTS inversores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -319,48 +343,60 @@ def delete_instalador(conn, instalador_id):
     return _execute_update_delete(conn, "DELETE FROM instaladores WHERE id = ?", (instalador_id,))
 
 # --- instalaciones ---
-def add_instalacion(conn, descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_dict):
-    datos_tecnicos_str = json.dumps(datos_tecnicos_dict)
-    sql = "INSERT INTO instalaciones (descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_json) VALUES (?, ?, ?, ?, ?)"
-    return _execute_insert(conn, sql, (descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_str))
+def add_instalacion(conn, data_dict):
+    """Añade una nueva instalación usando un diccionario de datos."""
+    # Lista de todas las columnas que podemos insertar
+    fields = ['descripcion', 'usuario_id', 'promotor_id', 'instalador_id',
+              'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
+              'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
+              'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
+              'inversor', 'numero_inversores', 'bateria', 'numero_baterias',
+              'distribuidora', 'cups', 'potencia_contratada_w']
+    
+    # Filtramos solo los campos que vienen en data_dict para construir la query
+    columns_to_insert = [f for f in fields if f in data_dict]
+    values_to_insert = [data_dict[f] for f in columns_to_insert]
+    
+    placeholders = ', '.join(['?'] * len(columns_to_insert))
+    sql = f"INSERT INTO instalaciones ({', '.join(columns_to_insert)}) VALUES ({placeholders})"
+    
+    return _execute_insert(conn, sql, tuple(values_to_insert))
 
 def get_instalacion_completa(conn, instalacion_id):
+    """Obtiene todos los datos de una instalación, ahora sin procesar JSON."""
+    # La query ahora es más simple porque no hay JSON que parsear
     sql = """
     SELECT
-        I.id as instalacion_id, I.fecha_creacion, I.descripcion, I.datos_tecnicos_json,
-        I.usuario_id, U.nombre as usuario_nombre, U.apellidos as usuario_apellidos, U.dni as usuario_dni, U.direccion as usuario_direccion,
-        I.promotor_id, P.nombre_razon_social as promotor_nombre, P.apellidos as promotor_apellidos, P.direccion_fiscal as promotor_direccion, P.dni_cif as promotor_cif,
-        I.instalador_id, INS.nombre_empresa as instalador_empresa, INS.direccion_empresa as instalador_direccion, INS.cif_empresa as instalador_cif,
-        INS.nombre_tecnico as instalador_tecnico_nombre, INS.competencia_tecnico as instalador_tecnico_competencia
+        I.*, -- Seleccionamos TODAS las columnas de la tabla instalaciones
+        U.nombre as usuario_nombre, U.apellidos as usuario_apellidos, U.dni as usuario_dni,
+        P.nombre_razon_social as promotor_nombre, P.dni_cif as promotor_cif,
+        INS.nombre_empresa as instalador_empresa, INS.cif_empresa as instalador_cif
     FROM instalaciones I
     LEFT JOIN usuarios U ON I.usuario_id = U.id
     LEFT JOIN promotores P ON I.promotor_id = P.id
     LEFT JOIN instaladores INS ON I.instalador_id = INS.id
     WHERE I.id = ?
     """
-    data = _execute_select(conn, sql, (instalacion_id,), one=True)
-    if data:
-        # En PostgreSQL con JSONB, 'datos_tecnicos_json' ya podría ser un dict.
-        # En SQLite, será un string. Normalizamos.
-        json_field = data.get('datos_tecnicos_json')
-        if isinstance(json_field, str):
-            try:
-                data['datos_tecnicos'] = json.loads(json_field)
-            except (json.JSONDecodeError, TypeError):
-                data['datos_tecnicos'] = {}
-        elif isinstance(json_field, dict):
-             data['datos_tecnicos'] = json_field
-        else:
-            data['datos_tecnicos'] = {}
-    return data
+    # _execute_select ya devuelve un diccionario, así que no hay que hacer nada más
+    return _execute_select(conn, sql, (instalacion_id,), one=True)
 
-def update_instalacion(conn, instalacion_id, descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_dict):
-    datos_tecnicos_str = json.dumps(datos_tecnicos_dict)
-    sql = """
-        UPDATE instalaciones SET descripcion = ?, usuario_id = ?, promotor_id = ?,
-        instalador_id = ?, datos_tecnicos_json = ? WHERE id = ?
-    """
-    return _execute_update_delete(conn, sql, (descripcion, usuario_id, promotor_id, instalador_id, datos_tecnicos_str, instalacion_id))
+def update_instalacion(conn, instalacion_id, data_dict):
+    """Actualiza una instalación usando un diccionario de datos."""
+    fields = ['descripcion', 'usuario_id', 'promotor_id', 'instalador_id',
+              'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
+              'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
+              'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
+              'inversor', 'numero_inversores', 'bateria', 'numero_baterias',
+              'distribuidora', 'cups', 'potencia_contratada_w']
+
+    fields_to_update = [f for f in fields if f in data_dict]
+    values = [data_dict[f] for f in fields_to_update]
+    values.append(instalacion_id)
+
+    set_clause = ', '.join([f"{field} = ?" for field in fields_to_update])
+    sql = f"UPDATE instalaciones SET {set_clause} WHERE id = ?"
+
+    return _execute_update_delete(conn, sql, tuple(values))
 
 def get_all_instalaciones(conn):
     """
