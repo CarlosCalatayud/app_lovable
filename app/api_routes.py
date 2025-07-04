@@ -219,7 +219,10 @@ def generate_selected_docs_api(instalacion_id):
         # Mapa de plantillas
         available_templates_map = {
             "MEMORIA TECNICA.docx": "Memoria Tecnica Instalacion {}.docx",
-            # ... tu mapa completo ...
+            "DECLARACION RESPONSABLE.docx": "Memoria Tecnica Instalacion {}.docx",
+            "ESTUDIO BASICO SEG Y SALUD.docx": "Memoria Tecnica Instalacion {}.docx",
+            "GESTION RESIDUOS.docx": "Memoria Tecnica Instalacion {}.docx",
+            "Plan de Control de Calidad.docx": "Memoria Tecnica Instalacion {}.docx",
             "CERTIFICADO FIN DE OBRA.docx": "Certificado Fin Obra Instalacion {}.docx",
         }
         
