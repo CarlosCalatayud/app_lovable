@@ -206,6 +206,14 @@ def generate_selected_docs_api(instalacion_id):
         
         # --- AHORA VIENE EL CAMBIO ---
 
+        # Ej: 'nombre_inversor' -> 'nombreInversor'
+        cleaned_context = {}
+        for key, value in final_context.items():
+            # Convertimos snake_case a camelCase para evitar errores en Jinja
+            parts = key.split('_')
+            new_key = parts[0] + ''.join(word.title() for word in parts[1:])
+            cleaned_context[new_key] = value
+        
         generated_files_in_memory = [] # Almacenará (nombre_archivo, bytes_del_archivo)
 
         # Mapa de plantillas
@@ -232,7 +240,7 @@ def generate_selected_docs_api(instalacion_id):
                 # Para esto, necesitamos una pequeña modificación en doc_generator.py (ver abajo)
                 # O podemos hacer el truco aquí mismo:
                 doc = doc_generator.DocxTemplate(template_path)
-                doc.render(final_context)
+                doc.render(cleaned_context) # Renderizamos el contexto limpio
                 doc.save(file_stream) # Guardamos en el buffer de memoria
                 file_stream.seek(0) # Rebobinamos el buffer para poder leerlo
 
