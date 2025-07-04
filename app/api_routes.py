@@ -184,6 +184,10 @@ def delete_instalacion_api(instalacion_id): # Renombrado para claridad
 def generate_selected_docs_api(instalacion_id):
     # --- Esta parte inicial no cambia ---
     data = request.json
+    current_app.logger.info("=============================================")
+    current_app.logger.info(f"Petición para generar docs para ID: {instalacion_id}")
+    current_app.logger.info(f"BODY RECIBIDO DE LOVABLE: {json.dumps(data, indent=2)}")
+    current_app.logger.info("=============================================")
     selected_template_files = data.get('documentos', [])
 
     if not selected_template_files:
@@ -199,6 +203,18 @@ def generate_selected_docs_api(instalacion_id):
 
         contexto_final = dict(instalacion_completa) # Creamos una copia
         
+                # Mapeamos y añadimos los datos de las entidades relacionadas para que coincidan
+        # con las variables de la plantilla de Word.
+        contexto_final.update({
+            'usuarioNombre': instalacion_completa.get('promotor_nombre', ''),
+            'usuarioDireccion': instalacion_completa.get('promotor_direccion', ''),
+            'usuarioDni': instalacion_completa.get('promotor_cif', ''),
+            'instaladorEmpresa': instalacion_completa.get('instalador_empresa', ''),
+            'instaladorDireccion': instalacion_completa.get('instalador_direccion', ''),
+            'instaladorCif': instalacion_completa.get('instalador_cif', ''),
+            'instaladorTecnicoNombre': instalacion_completa.get('instalador_tecnico_nombre', ''),
+            'instaladorTecnicoCompetencia': instalacion_completa.get('instalador_tecnico_competencia', '')
+        })
         # Obtener y fusionar datos de equipos
         nombre_panel = contexto_final.get('panel_solar')
         if nombre_panel:
@@ -232,6 +248,10 @@ def generate_selected_docs_api(instalacion_id):
                 # float() es suficiente para logging.
                 contexto_para_log[key] = float(value)
         
+        current_app.logger.info("=============================================")
+        current_app.logger.info("CONTEXTO FINAL (APLANADO) A ENVIAR A LA PLANTILLA:")
+        current_app.logger.info(json.dumps(contexto_para_log, indent=2, ensure_ascii=False))
+        current_app.logger.info("=============================================")
         # Ahora el logging es seguro porque no hay objetos datetime.
         # Ahora el logging es seguro contra datetime y decimal.
         try:
