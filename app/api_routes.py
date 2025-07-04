@@ -203,13 +203,15 @@ def generate_selected_docs_api(instalacion_id):
             panel_data = database.get_panel_by_name(conn, nombre_panel)
             if panel_data: contexto_final.update(panel_data)
 
+        nombre_inversor = contexto_final.get('inversor')
         if nombre_inversor:
             inversor_data = database.get_inversor_by_name(conn, nombre_inversor)
             if inversor_data: contexto_final.update(inversor_data)
-
+        
+        nombre_bateria = contexto_final.get('bateria')
         if nombre_bateria:
-            bateria_data = database.get_inversor_by_name(conn, nombre_bateria)
-            if bateria_data: contexto_final.update(bateria_data)
+             bateria_data = database.get_bateria_by_name(conn, nombre_bateria)
+             if bateria_data: contexto_final.update(bateria_data)
 
         contexto_calculado = calculations.calculate_all_derived_data(contexto_final.copy(), conn)
         contexto_final.update(contexto_calculado)
@@ -222,20 +224,7 @@ def generate_selected_docs_api(instalacion_id):
         # 3. Obtenemos los datos completos de los equipos seleccionados
         # (Esto requiere nuevas llamadas a la base de datos)
         
-        nombre_panel = contexto_final.get('panel_solar')
-        if nombre_panel:
-            panel_data = database.get_panel_by_name(conn, nombre_panel)
-            if panel_data: contexto_final.update(panel_data)
-
-        nombre_inversor = contexto_final.get('inversor')
-        if nombre_inversor:
-            inversor_data = database.get_inversor_by_name(conn, nombre_inversor)
-            if inversor_data: contexto_final.update(inversor_data)
-        
-        nombre_bateria = contexto_final.get('bateria')
-        if nombre_bateria:
-             bateria_data = database.get_bateria_by_name(conn, nombre_bateria)
-             if bateria_data: contexto_final.update(bateria_data)
+ 
 
         # 4. Realizamos los cálculos y los añadimos al contexto
         # El módulo de cálculos ahora recibe este contexto plano y lo enriquece
@@ -331,7 +320,6 @@ def generate_selected_docs_api(instalacion_id):
 
 
 # --- Endpoints para Usuarios (completando) ---
-@bp_api.route('/usuarios', methods=['POST']) # <--- ¡ASEGÚRATE QUE 'POST' ESTÁ AQUÍ!
 @bp_api.route('/usuarios', methods=['POST'])
 def create_usuario_api():
     data = request.json
