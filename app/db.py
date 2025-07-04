@@ -435,6 +435,26 @@ def update_panel_solar(conn, panel_id, data_dict):
     sql = f"UPDATE paneles_solares SET {set_clause} WHERE id = ?"
     return _execute_update_delete(conn, sql, tuple(values))
 
+def get_panel_by_name(conn, nombre_panel):
+    """Obtiene los detalles de un panel solar por su nombre."""
+    sql = "SELECT * FROM paneles_solares WHERE nombre_panel = ?"
+    return _execute_select(conn, sql, (nombre_panel,), one=True)
+
+def get_inversor_by_name(conn, nombre_inversor):
+    """Obtiene los detalles de un inversor por su nombre."""
+    sql = "SELECT * FROM inversores WHERE nombre_inversor = ?"
+    return _execute_select(conn, sql, (nombre_inversor,), one=True)
+
+def get_bateria_by_name(conn, nombre_bateria):
+    """Obtiene los detalles de una batería por su nombre."""
+    sql = "SELECT * FROM baterias WHERE nombre_bateria = ?"
+    return _execute_select(conn, sql, (nombre_bateria,), one=True)
+
+def get_contador_by_name(conn, nombre_contador):
+    """Obtiene los detalles de un contador por su nombre."""
+    sql = "SELECT * FROM contadores WHERE nombre_contador = ?"
+    return _execute_select(conn, sql, (nombre_contador,), one=True)
+# ... (añade funciones similares para batería si es necesario)
 # --- contadores ---
 def add_contador(conn, data_dict):
     nombre = data_dict.get('nombre_contador')
