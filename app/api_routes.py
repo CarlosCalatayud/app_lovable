@@ -196,42 +196,46 @@ def generate_selected_docs_api(instalacion_id):
         # 1. Empezamos con los datos técnicos que ya son un dict plano
         contexto_plano = instalacion_completa.get('datos_tecnicos', {})
 
+        contexto_plano.update({
+            'usuarioNombre': instalacion_completa.get('promotor_nombre', ''),
+            'usuarioDireccion': instalacion_completa.get('promotor_direccion', ''),
+            'usuarioDni': instalacion_completa.get('promotor_cif', ''),
+            'instaladorEmpresa': instalacion_completa.get('instalador_empresa', ''),
+            'instaladorDireccion': instalacion_completa.get('instalador_direccion', ''),
+            'instaladorCif': instalacion_completa.get('instalador_cif', ''),
+            'instaladorTecnicoNombre': instalacion_completa.get('instalador_tecnico_nombre', ''),
+            'instaladorTecnicoCompetencia': instalacion_completa.get('instalador_tecnico_competencia', '')
+        })
+
         # 2. Añadimos los datos de la instalación, del usuario, promotor e instalador
         # con los nombres de clave exactos que usa la plantilla de Word.
         
-        # Datos del Usuario/Promotor (asumimos que el promotor es el titular para el doc)
-        contexto_plano['usuarioNombre'] = instalacion_completa.get('promotor_nombre', '')
-        contexto_plano['usuarioDireccion'] = instalacion_completa.get('promotor_direccion', '')
-        contexto_plano['usuarioDni'] = instalacion_completa.get('promotor_cif', '')
-
-        # Datos de la Empresa Instaladora
-        contexto_plano['instaladorEmpresa'] = instalacion_completa.get('instalador_empresa', '')
-        contexto_plano['instaladorDireccion'] = instalacion_completa.get('instalador_direccion', '')
-        contexto_plano['instaladorCif'] = instalacion_completa.get('instalador_cif', '')
-        contexto_plano['instaladorTecnicoNombre'] = instalacion_completa.get('instalador_tecnico_nombre', '')
-        contexto_plano['instaladorTecnicoCompetencia'] = instalacion_completa.get('instalador_tecnico_competencia', '')
         
         # 3. Obtenemos los datos completos de los equipos seleccionados
         # (Esto requiere nuevas llamadas a la base de datos)
         
-        # Panel Solar
-        nombre_panel_seleccionado = contexto_plano.get('panel_solar')
-        if nombre_panel_seleccionado:
-            panel_data = database.get_panel_by_name(conn, nombre_panel_seleccionado) # Necesitamos crear esta función en db.py
-            if panel_data:
-                contexto_plano.update(panel_data) # Añade todos los campos del panel al contexto
+        nombre_panel = contexto_plano.get('panel_solar')
+        if nombre_panel:
+            panel_data = database.get_panel_by_name(conn, nombre_panel)
+            if panel_data: contexto_plano.update(panel_data)
 
-        # Inversor
-        nombre_inversor_seleccionado = contexto_plano.get('inversor')
-        if nombre_inversor_seleccionado:
-            inversor_data = database.get_inversor_by_name(conn, nombre_inversor_seleccionado) # Necesitamos crear esta función en db.py
-            if inversor_data:
-                contexto_plano.update(inversor_data) # Añade todos los campos del inversor
+        nombre_inversor = contexto_plano.get('inversor')
+        if nombre_inversor:
+            inversor_data = database.get_inversor_by_name(conn, nombre_inversor)
+            if inversor_data: contexto_plano.update(inversor_data)
+        
+        nombre_bateria = contexto_plano.get('bateria')
+        if nombre_bateria:
+             bateria_data = database.get_bateria_by_name(conn, nombre_bateria)
+             if bateria_data: contexto_plano.update(bateria_data)
 
         # 4. Realizamos los cálculos y los añadimos al contexto
         # El módulo de cálculos ahora recibe este contexto plano y lo enriquece
-        contexto_calculado = calculations.calculate_all_derived_data(contexto_plano, conn)
+        contexto_calculado = calculations.calculate_all_derived_data(contexto_plano.copy(), conn)
         contexto_plano.update(contexto_calculado)
+        
+        # A este punto, 'contexto_plano' es el diccionario final y plano para la plantilla
+        current_app.logger.info(f"Contexto final para plantilla: {json.dumps(contexto_plano, indent=2)}")
 
         # 5. Pasamos el contexto plano y final a la plantilla
         final_context_para_plantilla = contexto_plano
@@ -251,7 +255,7 @@ def generate_selected_docs_api(instalacion_id):
             "CERTIFICADO FIN DE OBRA.docx": "Certificado Fin Obra Instalacion {}.docx",
         }
         
-        templates_base_path = current_app.config.get('TEMPLATES_PATH', './plantillas_docs')
+        templates_base_path = current_app.config.get('TEMPLATES_PATH', './templates')
 
         for template_file_name in selected_template_files:
             if template_file_name in available_templates_map:
@@ -268,7 +272,7 @@ def generate_selected_docs_api(instalacion_id):
                 # Para esto, necesitamos una pequeña modificación en doc_generator.py (ver abajo)
                 # O podemos hacer el truco aquí mismo:
                 doc = doc_generator.DocxTemplate(template_path)
-                doc.render(final_context_para_plantilla) # Renderizamos el contexto limpio
+                doc.render(contexto_plano) # Renderizamos el contexto limpio
                 doc.save(file_stream) # Guardamos en el buffer de memoria
                 file_stream.seek(0) # Rebobinamos el buffer para poder leerlo
 
