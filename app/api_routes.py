@@ -366,6 +366,8 @@ def generate_selected_docs_api(instalacion_id):
 @token_required # ¡Aplica el decorador!
 def create_cliente_api():
     data = request.json
+    # TEMPORAL: Asignamos el ID de usuario fijo
+    data['app_user_id'] = "7978ca1c-503d-4550-8d04-3aa01d9113ba" 
     if not data or not data.get('nombre') or not data.get('dni'):
         return jsonify({'error': 'Faltan campos obligatorios: nombre y dni'}), 400
 
@@ -819,6 +821,8 @@ def delete_product(product_type, item_id):
 @bp_api.route('/clientes', methods=['GET']) # RUTA CAMBIADA
 @token_required
 def get_clientes(): # NOMBRE DE FUNCIÓN CAMBIADO
+    # TEMPORAL: Usamos un ID de usuario fijo para depurar
+    app_user_id_fijo = "7978ca1c-503d-4550-8d04-3aa01d9113ba" # Tu ID de usuario de Supabase
     conn = get_db_connection()
     # Llamada a la función de DB renombrada
     clientes = database.get_all_clientes(conn, g.user_id) 
@@ -836,8 +840,10 @@ def get_current_user():
     """
     # El decorador @token_required ya ha validado el token
     # y ha guardado el ID del usuario en g.user_id
+    # TEMPORAL: Usamos un ID de usuario fijo para depurar
+    app_user_id_fijo = "7978ca1c-503d-4550-8d04-3aa01d9113ba" # Tu ID de usuario de Supabase
     user_id = g.user_id
     return jsonify({
         "message": "Autenticación exitosa",
-        "user_id": user_id 
+        "user_id": app_user_id_fijo 
     }), 200
