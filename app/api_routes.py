@@ -396,19 +396,6 @@ def create_cliente_api():
         if conn: conn.close()
 
 
-@bp_api.route('/clientes', methods=['GET'])
-
-@token_required # ¡Aplica el decorador!
-def get_clientes():
-    conn = get_db_connection()
-    # Usa tu función get_all_instalaciones, adáptala si es necesario
-    # para devolver una lista de diccionarios fácilmente serializables a JSON
-    clientes_raw = database.get_all_clientes(conn) # Esta función devuelve (id, descripcion, fecha_creacion)
-    conn.close()
-    # Convertir sqlite3.Row a dicts
-    clientes = [dict(row) for row in clientes_raw]
-    return jsonify(clientes)
-
 @bp_api.route('/clientes/<int:user_id>', methods=['GET'])
 
 @token_required # ¡Aplica el decorador!
