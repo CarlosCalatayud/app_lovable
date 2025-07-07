@@ -81,14 +81,14 @@ def create_tables():
         )''',
         # Para PostgreSQL, el tipo JSONB es más eficiente que TEXT para JSON.
         f'''CREATE TABLE IF NOT EXISTS instalaciones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            id SERIAL PRIMARY KEY,
+            fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
             descripcion TEXT,
             usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
             promotor_id INTEGER REFERENCES promotores(id) ON DELETE SET NULL,
             instalador_id INTEGER REFERENCES instaladores(id) ON DELETE SET NULL,
             
-            -- INICIO DE NUEVAS COLUMNAS PARA DATOS TÉCNICOS --
+            -- Datos de Emplazamiento (ya los teníamos)
             direccion_emplazamiento TEXT,
             tipo_via TEXT,
             nombre_via TEXT,
@@ -99,6 +99,8 @@ def create_tables():
             provincia TEXT,
             referencia_catastral TEXT,
             tipo_finca TEXT,
+            
+            -- Selección de Equipos (ya los teníamos)
             panel_solar TEXT,
             numero_paneles INTEGER,
             inversor TEXT,
@@ -107,12 +109,20 @@ def create_tables():
             numero_baterias INTEGER,
             distribuidora TEXT,
             cups TEXT,
-            potencia_contratada_w INTEGER
-            -- FIN DE NUEVAS COLUMNAS --
-            
-            -- ELIMINAMOS la columna de JSON:
-            -- datos_tecnicos_json {'JSONB' if db_type == 'postgres' else 'TEXT'}
+            potencia_contratada_w INTEGER,
+
+            -- NUEVAS COLUMNAS BASADAS EN LA PLANTILLA --
+            tipo_de_estructura TEXT,
+            tipo_de_cubierta TEXT,
+            material_cableado TEXT,
+            longitud_cable_cc_string1 NUMERIC,
+            seccion_cable_ac_mm2 NUMERIC,
+            longitud_cable_ac_m NUMERIC,
+            protector_sobretensiones TEXT,
+            diferencial_a INTEGER,
+            sensibilidad_ma INTEGER
         )''',
+
         '''CREATE TABLE IF NOT EXISTS inversores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre_inversor TEXT NOT NULL UNIQUE,
@@ -346,12 +356,19 @@ def delete_instalador(conn, instalador_id):
 def add_instalacion(conn, data_dict):
     """Añade una nueva instalación usando un diccionario de datos."""
     # Lista de todas las columnas que podemos insertar
-    fields = ['descripcion', 'usuario_id', 'promotor_id', 'instalador_id',
-              'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
-              'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
-              'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
-              'inversor', 'numero_inversores', 'bateria', 'numero_baterias',
-              'distribuidora', 'cups', 'potencia_contratada_w']
+    fields = [
+        'descripcion', 'usuario_id', 'promotor_id', 'instalador_id',
+        'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
+        'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
+        'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
+        'inversor', 'numero_inversores', 'bateria', 'numero_baterias',
+        'distribuidora', 'cups', 'potencia_contratada_w',
+        # Nuevos campos
+        'tipo_de_estructura', 'tipo_de_cubierta', 'material_cableado',
+        'longitud_cable_cc_string1', 'seccion_cable_ac_mm2', 'longitud_cable_ac_m',
+        'protector_sobretensiones', 'diferencial_a', 'sensibilidad_ma'
+    ]
+
     
     # Filtramos solo los campos que vienen en data_dict para construir la query
     columns_to_insert = [f for f in fields if f in data_dict]
@@ -382,12 +399,19 @@ def get_instalacion_completa(conn, instalacion_id):
 
 def update_instalacion(conn, instalacion_id, data_dict):
     """Actualiza una instalación usando un diccionario de datos."""
-    fields = ['descripcion', 'usuario_id', 'promotor_id', 'instalador_id',
-              'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
-              'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
-              'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
-              'inversor', 'numero_inversores', 'bateria', 'numero_baterias',
-              'distribuidora', 'cups', 'potencia_contratada_w']
+    fields = [
+        'descripcion', 'usuario_id', 'promotor_id', 'instalador_id',
+        'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
+        'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
+        'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
+        'inversor', 'numero_inversores', 'bateria', 'numero_baterias',
+        'distribuidora', 'cups', 'potencia_contratada_w',
+        # Nuevos campos
+        'tipo_de_estructura', 'tipo_de_cubierta', 'material_cableado',
+        'longitud_cable_cc_string1', 'seccion_cable_ac_mm2', 'longitud_cable_ac_m',
+        'protector_sobretensiones', 'diferencial_a', 'sensibilidad_ma'
+    ]
+
 
     fields_to_update = [f for f in fields if f in data_dict]
     values = [data_dict[f] for f in fields_to_update]
