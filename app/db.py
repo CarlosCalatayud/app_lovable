@@ -316,14 +316,20 @@ def delete_usuario(conn, usuario_id):
         return False, "El usuario está asignado a una o más instalaciones y no puede ser eliminado."
     return _execute_update_delete(conn, "DELETE FROM usuarios WHERE id = ?", (usuario_id,))
 
+def get_usuario_by_id(conn, usuario_id):
+    """Obtiene un único usuario por su ID."""
+    sql = "SELECT * FROM usuarios WHERE id = ?"
+    return _execute_select(conn, sql, (usuario_id,), one=True)
+
 # ... (Repite el patrón para promotores, instaladores, etc.) ...
 # --- promotores ---
 def add_promotor(conn, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
     sql = "INSERT INTO promotores (nombre_razon_social, apellidos, direccion_fiscal, dni_cif) VALUES (?, ?, ?, ?)"
     return _execute_insert(conn, sql, (nombre_razon_social, apellidos, direccion_fiscal, dni_cif))
 def get_promotor_by_id(conn, promotor_id):
-    # Y esta...
-    return _execute_select(conn, "SELECT * FROM promotores WHERE id = ?", (promotor_id,), one=True)
+    """Obtiene un único promotor por su ID."""
+    sql = "SELECT * FROM promotores WHERE id = ?"
+    return _execute_select(conn, sql, (promotor_id,), one=True)
 def get_all_promotores(conn):
     return _execute_select(conn, "SELECT * FROM promotores ORDER BY nombre_razon_social, apellidos")
 def update_promotor(conn, promotor_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
@@ -351,6 +357,10 @@ def delete_instalador(conn, instalador_id):
     if count and count['c'] > 0:
         return False, "El instalador está asignado a una o más instalaciones y no puede ser eliminado."
     return _execute_update_delete(conn, "DELETE FROM instaladores WHERE id = ?", (instalador_id,))
+def get_instalador_by_id(conn, instalador_id):
+    """Obtiene un único instalador por su ID."""
+    sql = "SELECT * FROM instaladores WHERE id = ?"
+    return _execute_select(conn, sql, (instalador_id,), one=True)
 
 # --- instalaciones ---
 def add_instalacion(conn, data_dict):
