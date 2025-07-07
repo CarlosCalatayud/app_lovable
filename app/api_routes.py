@@ -4,6 +4,8 @@ import json # Para manejar los datos técnicos
 from . import db as database # Importa el módulo y le da el alias 'database'
 from . import calc as calculations # Importa el módulo de cálculos
 from .generation import doc_generator
+from .auth import token_required # Importa el decorador
+
 import os
 import io # Para trabajar con bytes en memoria
 import zipfile # Para crear archivos ZIP
@@ -16,6 +18,8 @@ def get_db_connection():
 
 # --- Endpoints para Instalaciones ---
 @bp_api.route('/instalaciones', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
 def get_instalaciones():
     conn = get_db_connection()
     # Usa tu función get_all_instalaciones, adáptala si es necesario
@@ -27,6 +31,8 @@ def get_instalaciones():
     return jsonify(instalaciones)
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
 def get_instalacion_detalle(instalacion_id):
     conn = get_db_connection()
     # Usa tu función get_instalacion_completa
@@ -37,6 +43,8 @@ def get_instalacion_detalle(instalacion_id):
     return jsonify({'error': 'Instalación no encontrada'}), 404
 
 @bp_api.route('/instalaciones', methods=['POST'])
+
+@token_required # ¡Aplica el decorador!
 def create_instalacion():
     data = request.json # 'data' es ahora un diccionario plano
     if not data or not data.get('descripcion'):
@@ -62,6 +70,8 @@ def create_instalacion():
     return jsonify({'error': 'Error al crear instalación'}), 400
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['PUT'])
+
+@token_required # ¡Aplica el decorador!
 def update_instalacion_endpoint(instalacion_id):
     data = request.json # 'data' es un diccionario plano
     conn = None
@@ -95,6 +105,8 @@ def update_instalacion_endpoint(instalacion_id):
             conn.close()
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['DELETE']) # <--- DEBE TENER EL ID Y 'DELETE'
+
+@token_required # ¡Aplica el decorador!
 def delete_instalacion_api(instalacion_id): # Renombrado para claridad
     conn = get_db_connection()
     try:
@@ -143,7 +155,7 @@ def delete_instalacion_api(instalacion_id): # Renombrado para claridad
 #     # Deberás reestructurar `user_inputs_for_calc` para que tenga la forma
 #     # que `calculate_all_derived_data` espera. Esto es CRUCIAL.
 #     # Probablemente `user_inputs_for_calc` deba ser el `datos_tecnicos_dict`
-#     # más los datos de las entidades (usuario, promotor, instalador) y de la propia instalación.
+#     # más los datos de las entidades (cliente, promotor, instalador) y de la propia instalación.
 
 #     # Ejemplo: Asumiendo que calculations.py espera un dict plano:
 #     context_dict = {}
@@ -153,7 +165,7 @@ def delete_instalacion_api(instalacion_id): # Renombrado para claridad
 #     context_dict.update({ # Añadir datos de entidades y generales
 #         'descripcion_instalacion': instalacion_completa.get('descripcion'),
 #         'fecha_creacion_instalacion': instalacion_completa.get('fecha_creacion'),
-#         'nombre_usuario': instalacion_completa.get('nombre_usuario'),
+#         'nombre_cliente': instalacion_completa.get('nombre_cliente'),
 #         # ... y así sucesivamente para todos los datos de entidades
 #         # que se usan directamente en las plantillas o en los cálculos
 #     })
@@ -181,6 +193,8 @@ def delete_instalacion_api(instalacion_id): # Renombrado para claridad
 #         return jsonify({"error": "Error al generar el documento"}), 500
 # NUEVO Endpoint para generar documentos seleccionados
 @bp_api.route('/instalaciones/<int:instalacion_id>/generate-selected-docs', methods=['POST'])
+
+@token_required # ¡Aplica el decorador!
 def generate_selected_docs_api(instalacion_id):
     # --- Esta parte inicial no cambia ---
     data = request.json
@@ -206,9 +220,9 @@ def generate_selected_docs_api(instalacion_id):
                 # Mapeamos y añadimos los datos de las entidades relacionadas para que coincidan
         # con las variables de la plantilla de Word.
         contexto_final.update({
-            'usuarioNombre': instalacion_completa.get('promotor_nombre', ''),
-            'usuarioDireccion': instalacion_completa.get('promotor_direccion', ''),
-            'usuarioDni': instalacion_completa.get('promotor_cif', ''),
+            'clienteNombre': instalacion_completa.get('promotor_nombre', ''),
+            'clienteDireccion': instalacion_completa.get('promotor_direccion', ''),
+            'clienteDni': instalacion_completa.get('promotor_cif', ''),
             'instaladorEmpresa': instalacion_completa.get('instalador_empresa', ''),
             'instaladorDireccion': instalacion_completa.get('instalador_direccion', ''),
             'instaladorCif': instalacion_completa.get('instalador_cif', ''),
@@ -347,8 +361,10 @@ def generate_selected_docs_api(instalacion_id):
 
 
 # --- Endpoints para Usuarios (completando) ---
-@bp_api.route('/usuarios', methods=['POST'])
-def create_usuario_api():
+@bp_api.route('/clientes', methods=['POST'])
+
+@token_required # ¡Aplica el decorador!
+def create_cliente_api():
     data = request.json
     if not data or not data.get('nombre') or not data.get('dni'):
         return jsonify({'error': 'Faltan campos obligatorios: nombre y dni'}), 400
@@ -356,7 +372,7 @@ def create_usuario_api():
     conn = None
     try:
         conn = get_db_connection()
-        new_id, message = database.add_usuario(conn,
+        new_id, message = database.add_cliente(conn,
                                             data.get('nombre'),
                                             data.get('apellidos'),
                                             data.get('dni'),
@@ -368,45 +384,51 @@ def create_usuario_api():
             return jsonify({'id': new_id, 'message': message}), 201
         else:
             conn.rollback()
-            current_app.logger.error(f"Error al crear usuario, haciendo ROLLBACK. Mensaje: {message}")
+            current_app.logger.error(f"Error al crear cliente, haciendo ROLLBACK. Mensaje: {message}")
             error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
             return jsonify({'error': message}), error_code
 
     except Exception as e:
         if conn: conn.rollback()
-        current_app.logger.error(f"Excepción en create_usuario_api: {e}", exc_info=True)
+        current_app.logger.error(f"Excepción en create_cliente_api: {e}", exc_info=True)
         return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
         if conn: conn.close()
 
 
-@bp_api.route('/usuarios', methods=['GET'])
-def get_usuarios():
+@bp_api.route('/clientes', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
+def get_clientes():
     conn = get_db_connection()
     # Usa tu función get_all_instalaciones, adáptala si es necesario
     # para devolver una lista de diccionarios fácilmente serializables a JSON
-    usuarios_raw = database.get_all_usuarios(conn) # Esta función devuelve (id, descripcion, fecha_creacion)
+    clientes_raw = database.get_all_clientes(conn) # Esta función devuelve (id, descripcion, fecha_creacion)
     conn.close()
     # Convertir sqlite3.Row a dicts
-    usuarios = [dict(row) for row in usuarios_raw]
-    return jsonify(usuarios)
+    clientes = [dict(row) for row in clientes_raw]
+    return jsonify(clientes)
 
-@bp_api.route('/usuarios/<int:user_id>', methods=['GET'])
-def get_usuario(user_id):
+@bp_api.route('/clientes/<int:user_id>', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
+def get_cliente(user_id):
     conn = get_db_connection()
-    usuario = database.get_usuario_by_id(conn, user_id)
+    cliente = database.get_cliente_by_id(conn, user_id)
     conn.close()
-    if usuario:
-        return jsonify(usuario)
+    if cliente:
+        return jsonify(cliente)
     return jsonify({'error': 'Usuario no encontrado'}), 404
 
-@bp_api.route('/usuarios/<int:user_id>', methods=['PUT'])
-def update_usuario_api(user_id):
+@bp_api.route('/clientes/<int:user_id>', methods=['PUT'])
+
+@token_required # ¡Aplica el decorador!
+def update_cliente_api(user_id):
     data = request.json
     conn = None
     try:
         conn = get_db_connection()
-        success, message = database.update_usuario(conn, user_id,
+        success, message = database.update_cliente(conn, user_id,
                                    data.get('nombre'), data.get('apellidos'),
                                    data.get('dni'), data.get('direccion'))
         if success:
@@ -415,20 +437,22 @@ def update_usuario_api(user_id):
             return jsonify({'message': 'Usuario actualizado'}), 200
         else:
             conn.rollback()
-            current_app.logger.warning(f"Fallo al actualizar usuario ID {user_id}: {message}")
+            current_app.logger.warning(f"Fallo al actualizar cliente ID {user_id}: {message}")
             return jsonify({'error': message}), 400
     except Exception as e:
         if conn: conn.rollback()
-        current_app.logger.error(f"Excepción al actualizar usuario ID {user_id}: {e}", exc_info=True)
+        current_app.logger.error(f"Excepción al actualizar cliente ID {user_id}: {e}", exc_info=True)
         return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
         if conn: conn.close()
 
 
-@bp_api.route('/usuarios/<int:user_id>', methods=['DELETE'])
-def delete_usuario_api(user_id): # Renombrado
+@bp_api.route('/clientes/<int:user_id>', methods=['DELETE'])
+
+@token_required # ¡Aplica el decorador!
+def delete_cliente_api(user_id): # Renombrado
     conn = get_db_connection()
-    success, message = database.delete_usuario(conn, user_id) # delete_usuario devuelve (bool, mensaje)
+    success, message = database.delete_cliente(conn, user_id) # delete_cliente devuelve (bool, mensaje)
     conn.close()
     if success:
         return jsonify({'message': message}), 200
@@ -437,6 +461,8 @@ def delete_usuario_api(user_id): # Renombrado
 
 # --- Endpoints para Promotores (CRUD completo) ---
 @bp_api.route('/promotores', methods=['POST'])
+
+@token_required # ¡Aplica el decorador!
 def create_promotor():
     data = request.json
     if not data or not data.get('nombre_razon_social') or not data.get('dni_cif'):
@@ -469,6 +495,8 @@ def create_promotor():
         if conn: conn.close()
 
 @bp_api.route('/promotores', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
 def get_promotores():
     conn = get_db_connection()
     promotores = database.get_all_promotores(conn)
@@ -476,6 +504,8 @@ def get_promotores():
     return jsonify(promotores)
 
 @bp_api.route('/promotores/<int:promotor_id>', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
 def get_promotor(promotor_id):
     conn = get_db_connection()
     promotor = database.get_promotor_by_id(conn, promotor_id)
@@ -485,6 +515,8 @@ def get_promotor(promotor_id):
     return jsonify({'error': 'Promotor no encontrado'}), 404
 
 @bp_api.route('/promotores/<int:promotor_id>', methods=['PUT'])
+
+@token_required # ¡Aplica el decorador!
 def update_promotor_api(promotor_id):
     data = request.json
     conn = None
@@ -514,6 +546,8 @@ def update_promotor_api(promotor_id):
         if conn: conn.close()
 
 @bp_api.route('/promotores/<int:promotor_id>', methods=['DELETE'])
+
+@token_required # ¡Aplica el decorador!
 def delete_promotor_api(promotor_id):
     conn = get_db_connection()
     success, message = database.delete_promotor(conn, promotor_id)
@@ -525,6 +559,8 @@ def delete_promotor_api(promotor_id):
 
 # --- Endpoints para Instaladores (CRUD completo) ---
 @bp_api.route('/instaladores', methods=['POST'])
+
+@token_required # ¡Aplica el decorador!
 def create_instalador():
     data = request.json
     if not data or not data.get('nombre_empresa') or not data.get('cif_empresa'):
@@ -560,6 +596,8 @@ def create_instalador():
             conn.close()
 
 @bp_api.route('/instaladores', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
 def get_instaladores():
     conn = get_db_connection()
     instaladores = database.get_all_instaladores(conn)
@@ -576,6 +614,8 @@ def get_instaladores():
     return jsonify(instaladores)
 
 @bp_api.route('/instaladores/<int:instalador_id>', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
 def get_instalador(instalador_id):
     conn = get_db_connection()
     instalador = database.get_instalador_by_id(conn, instalador_id)
@@ -585,6 +625,8 @@ def get_instalador(instalador_id):
     return jsonify({'error': 'Instalador no encontrado'}), 404
 
 @bp_api.route('/instaladores/<int:instalador_id>', methods=['PUT'])
+
+@token_required # ¡Aplica el decorador!
 def update_instalador_api(instalador_id):
     data = request.json
     conn = None
@@ -615,6 +657,8 @@ def update_instalador_api(instalador_id):
         if conn: conn.close()
 
 @bp_api.route('/instaladores/<int:instalador_id>', methods=['DELETE'])
+
+@token_required # ¡Aplica el decorador!
 def delete_instalador_api(instalador_id):
     conn = get_db_connection()
     success, message = database.delete_instalador(conn, instalador_id)
@@ -640,6 +684,8 @@ CATALOG_TABLE_MAP = {
 
 
 @bp_api.route('/productos/<string:product_type>', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
 def get_all_products_by_type(product_type):
     if product_type not in PRODUCT_TABLE_MAP:
         return jsonify({'error': f'Tipo de producto no válido: {product_type}'}), 404
@@ -662,6 +708,8 @@ def get_all_products_by_type(product_type):
     return jsonify(items)
 
 @bp_api.route('/catalogos/<string:catalog_name>', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
 def get_catalog_data(catalog_name):
     if catalog_name not in CATALOG_TABLE_MAP:
         return jsonify({'error': f'Catálogo no válido: {catalog_name}'}), 404
@@ -685,6 +733,8 @@ def get_catalog_data(catalog_name):
 
 
 @bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['GET'])
+
+@token_required # ¡Aplica el decorador!
 def get_product_by_id(product_type, item_id):
     if product_type not in PRODUCT_TABLE_MAP:
         return jsonify({'error': 'Tipo de producto no válido'}), 404
@@ -699,6 +749,8 @@ def get_product_by_id(product_type, item_id):
 
 
 @bp_api.route('/productos/<string:product_type>', methods=['POST'])
+
+@token_required # ¡Aplica el decorador!
 def create_product(product_type):
     if product_type not in PRODUCT_TABLE_MAP or "add_func" not in PRODUCT_TABLE_MAP[product_type]:
         return jsonify({'error': 'Creación no soportada para este tipo de producto'}), 400
@@ -729,6 +781,8 @@ def create_product(product_type):
 
 
 @bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['PUT'])
+
+@token_required # ¡Aplica el decorador!
 def update_product(product_type, item_id):
     if product_type not in PRODUCT_TABLE_MAP or "update_func" not in PRODUCT_TABLE_MAP[product_type]:
         return jsonify({'error': 'Actualización no soportada para este tipo de producto'}), 400
@@ -759,6 +813,8 @@ def update_product(product_type, item_id):
 
 
 @bp_api.route('/productos/<string:product_type>/<int:item_id>', methods=['DELETE'])
+
+@token_required # ¡Aplica el decorador!
 def delete_product(product_type, item_id):
     if product_type not in PRODUCT_TABLE_MAP: # Solo los que tienen CRUD completo
         return jsonify({'error': 'Eliminación no soportada para este tipo de producto o tipo no válido'}), 400
@@ -772,3 +828,12 @@ def delete_product(product_type, item_id):
     return jsonify({'error': message}), 400
 
 # ... (Implementar GET by ID, PUT, DELETE para Usuarios) ...
+
+@bp_api.route('/clientes', methods=['GET']) # RUTA CAMBIADA
+@token_required
+def get_clientes(): # NOMBRE DE FUNCIÓN CAMBIADO
+    conn = get_db_connection()
+    # Llamada a la función de DB renombrada
+    clientes = database.get_all_clientes(conn, g.user_id) 
+    conn.close()
+    return jsonify(clientes)

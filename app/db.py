@@ -57,15 +57,17 @@ def create_tables():
     db_type = 'postgres' if is_postgres(conn) else 'sqlite'
     
     tables_sql = [
-        '''CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+        '''CREATE TABLE IF NOT EXISTS clientes (
+            id SERIAL PRIMARY KEY,
+            app_user_id TEXT NOT NULL, -- ID del usuario de la app (Supabase) que es dueño de este cliente
             nombre TEXT NOT NULL,
             apellidos TEXT NOT NULL,
-            dni TEXT UNIQUE NOT NULL,
+            dni TEXT UNIQUE NOT NULL, -- La unicidad del DNI ahora es por cliente, no por usuario global
             direccion TEXT
         )''',
         '''CREATE TABLE IF NOT EXISTS promotores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            app_user_id TEXT NOT NULL, -- ID del usuario de la app (Supabase) que es dueño de este cliente
             nombre_razon_social TEXT NOT NULL,
             apellidos TEXT,
             direccion_fiscal TEXT NOT NULL,
@@ -73,6 +75,7 @@ def create_tables():
         )''',
         '''CREATE TABLE IF NOT EXISTS instaladores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            app_user_id TEXT NOT NULL, -- ID del usuario de la app (Supabase) que es dueño de este cliente
             nombre_empresa TEXT NOT NULL,
             direccion_empresa TEXT NOT NULL,
             cif_empresa TEXT UNIQUE NOT NULL,
@@ -82,9 +85,10 @@ def create_tables():
         # Para PostgreSQL, el tipo JSONB es más eficiente que TEXT para JSON.
         f'''CREATE TABLE IF NOT EXISTS instalaciones (
             id SERIAL PRIMARY KEY,
+            app_user_id TEXT NOT NULL,
             fecha_creacion TIMESTAMPTZ DEFAULT NOW(),
             descripcion TEXT,
-            usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+            cliente_id INTEGER REFERENCES clientes(id) ON DELETE SET NULL,
             promotor_id INTEGER REFERENCES promotores(id) ON DELETE SET NULL,
             instalador_id INTEGER REFERENCES instaladores(id) ON DELETE SET NULL,
             
@@ -297,29 +301,29 @@ def _execute_select(conn, sql, params=None, one=False):
         else:
             return [] # NUNCA DEVOLVER None, SIEMPRE UNA LISTA VACÍA
 
-# --- usuarios ---
-def add_usuario(conn, nombre, apellidos, dni, direccion):
-    sql = "INSERT INTO usuarios (nombre, apellidos, dni, direccion) VALUES (?, ?, ?, ?)"
+# --- clientes ---
+def add_cliente(conn, nombre, apellidos, dni, direccion):
+    sql = "INSERT INTO clientes (nombre, apellidos, dni, direccion) VALUES (?, ?, ?, ?)"
     return _execute_insert(conn, sql, (nombre, apellidos, dni, direccion))
 
-def get_all_usuarios(conn):
-    return _execute_select(conn, "SELECT * FROM usuarios ORDER BY nombre, apellidos")
+def get_all_clientes(conn):
+    return _execute_select(conn, "SELECT * FROM clientes ORDER BY nombre, apellidos")
 
-def update_usuario(conn, usuario_id, nombre, apellidos, dni, direccion):
-    sql = "UPDATE usuarios SET nombre = ?, apellidos = ?, dni = ?, direccion = ? WHERE id = ?"
-    return _execute_update_delete(conn, sql, (nombre, apellidos, dni, direccion, usuario_id))
+def update_cliente(conn, cliente_id, nombre, apellidos, dni, direccion):
+    sql = "UPDATE clientes SET nombre = ?, apellidos = ?, dni = ?, direccion = ? WHERE id = ?"
+    return _execute_update_delete(conn, sql, (nombre, apellidos, dni, direccion, cliente_id))
 
-def delete_usuario(conn, usuario_id):
+def delete_cliente(conn, cliente_id):
     # Primero, comprobar dependencias
-    count = _execute_select(conn, "SELECT COUNT(*) as c FROM instalaciones WHERE usuario_id = ?", (usuario_id,), one=True)
+    count = _execute_select(conn, "SELECT COUNT(*) as c FROM instalaciones WHERE  = ?", (cliente_id,), one=True)
     if count and count['c'] > 0:
-        return False, "El usuario está asignado a una o más instalaciones y no puede ser eliminado."
-    return _execute_update_delete(conn, "DELETE FROM usuarios WHERE id = ?", (usuario_id,))
+        return False, "El cliente está asignado a una o más instalaciones y no puede ser eliminado."
+    return _execute_update_delete(conn, "DELETE FROM clientes WHERE id = ?", (cliente_id,))
 
-def get_usuario_by_id(conn, usuario_id):
-    """Obtiene un único usuario por su ID."""
-    sql = "SELECT * FROM usuarios WHERE id = ?"
-    return _execute_select(conn, sql, (usuario_id,), one=True)
+def get_cliente_by_id(conn, cliente_id):
+    """Obtiene un único cliente por su ID."""
+    sql = "SELECT * FROM clientes WHERE id = ?"
+    return _execute_select(conn, sql, (cliente_id,), one=True)
 
 # ... (Repite el patrón para promotores, instaladores, etc.) ...
 # --- promotores ---
@@ -367,7 +371,7 @@ def add_instalacion(conn, data_dict):
     """Añade una nueva instalación usando un diccionario de datos."""
     # Lista de todas las columnas que podemos insertar
     fields = [
-        'descripcion', 'usuario_id', 'promotor_id', 'instalador_id',
+        'descripcion', 'cliente_id', 'promotor_id', 'instalador_id',
         'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
         'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
         'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
@@ -395,11 +399,11 @@ def get_instalacion_completa(conn, instalacion_id):
     sql = """
     SELECT
         I.*, -- Seleccionamos TODAS las columnas de la tabla instalaciones
-        U.nombre as usuario_nombre, U.apellidos as usuario_apellidos, U.dni as usuario_dni,
+        U.nombre as cliente_nombre, U.apellidos as cliente_apellidos, U.dni as cliente_dni,
         P.nombre_razon_social as promotor_nombre, P.dni_cif as promotor_cif,
         INS.nombre_empresa as instalador_empresa, INS.cif_empresa as instalador_cif
     FROM instalaciones I
-    LEFT JOIN usuarios U ON I.usuario_id = U.id
+    LEFT JOIN clientes U ON I.cliente_id = U.id
     LEFT JOIN promotores P ON I.promotor_id = P.id
     LEFT JOIN instaladores INS ON I.instalador_id = INS.id
     WHERE I.id = ?
@@ -410,7 +414,7 @@ def get_instalacion_completa(conn, instalacion_id):
 def update_instalacion(conn, instalacion_id, data_dict):
     """Actualiza una instalación usando un diccionario de datos."""
     fields = [
-        'descripcion', 'usuario_id', 'promotor_id', 'instalador_id',
+        'descripcion', 'cliente_id', 'promotor_id', 'instalador_id',
         'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
         'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
         'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
@@ -444,7 +448,7 @@ def get_all_instalaciones(conn):
 
 def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
     # Lista de validación para seguridad
-    VALID_TABLES = ["inversores", "paneles_solares", "contadores", "baterias", "tipos_vias", "distribuidoras", "categorias_instalador", "usuarios", "promotores", "instaladores", "tipos_finca"]
+    VALID_TABLES = ["inversores", "paneles_solares", "contadores", "baterias", "tipos_vias", "distribuidoras", "categorias_instalador", "clientes", "promotores", "instaladores", "tipos_finca"]
     if table_name not in VALID_TABLES:
         print(f"!!! INTENTO DE ACCESO A TABLA NO VÁLIDA: {table_name} !!!")
         # Devolvemos una lista vacía para no romper el frontend
