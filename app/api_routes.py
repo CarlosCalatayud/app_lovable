@@ -405,7 +405,7 @@ def get_cliente(user_id):
     conn.close()
     if cliente:
         return jsonify(cliente)
-    return jsonify({'error': 'Usuario no encontrado'}), 404
+    return jsonify({'error': 'Usuario no encontrado'}), 404<
 
 @bp_api.route('/clientes/<int:user_id>', methods=['PUT'])
 
@@ -824,3 +824,20 @@ def get_clientes(): # NOMBRE DE FUNCIÓN CAMBIADO
     clientes = database.get_all_clientes(conn, g.user_id) 
     conn.close()
     return jsonify(clientes)
+
+
+# --- NUEVO ENDPOINT DE PRUEBA DE AUTENTICACIÓN ---
+@bp_api.route('/me', methods=['GET'])
+@token_required # ¡Protegido por nuestro decorador!
+def get_current_user():
+    """
+    Devuelve el ID del usuario autenticado que viene en el token.
+    Sirve para probar que la autenticación funciona.
+    """
+    # El decorador @token_required ya ha validado el token
+    # y ha guardado el ID del usuario en g.user_id
+    user_id = g.user_id
+    return jsonify({
+        "message": "Autenticación exitosa",
+        "user_id": user_id 
+    }), 200
