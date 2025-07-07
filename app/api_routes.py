@@ -825,7 +825,7 @@ def get_clientes(): # NOMBRE DE FUNCIÓN CAMBIADO
     app_user_id_fijo = "7978ca1c-503d-4550-8d04-3aa01d9113ba" # Tu ID de usuario de Supabase
     conn = get_db_connection()
     # Llamada a la función de DB renombrada
-    clientes = database.get_all_clientes(conn, g.user_id) 
+    clientes = database.get_all_clientes(conn, app_user_id_fijo) 
     conn.close()
     return jsonify(clientes)
 
