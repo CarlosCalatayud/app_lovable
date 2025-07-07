@@ -405,7 +405,7 @@ def get_cliente(user_id):
     conn.close()
     if cliente:
         return jsonify(cliente)
-    return jsonify({'error': 'Usuario no encontrado'}), 404<
+    return jsonify({'error': 'Usuario no encontrado'}), 404
 
 @bp_api.route('/clientes/<int:user_id>', methods=['PUT'])
 
