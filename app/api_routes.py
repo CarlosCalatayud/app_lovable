@@ -1,5 +1,5 @@
 # app/api_routes.py
-from flask import Blueprint, jsonify, request, current_app, send_file, make_response
+from flask import Blueprint, jsonify, request, current_app, send_file, make_response, g
 import json # Para manejar los datos técnicos
 from . import db as database # Importa el módulo y le da el alias 'database'
 from . import calc as calculations # Importa el módulo de cálculos
@@ -19,43 +19,39 @@ def get_db_connection():
 # --- Endpoints para Instalaciones ---
 @bp_api.route('/instalaciones', methods=['GET'])
 
-@token_required # ¡Aplica el decorador!
+@token_required
 def get_instalaciones():
     conn = get_db_connection()
-    # Usa tu función get_all_instalaciones, adáptala si es necesario
-    # para devolver una lista de diccionarios fácilmente serializables a JSON
-    instalaciones_raw = database.get_all_instalaciones(conn) # Esta función devuelve (id, descripcion, fecha_creacion)
+    instalaciones = database.get_all_instalaciones(conn, g.user_id)
     conn.close()
-    # Convertir sqlite3.Row a dicts
-    instalaciones = [dict(row) for row in instalaciones_raw]
     return jsonify(instalaciones)
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['GET'])
 
-@token_required # ¡Aplica el decorador!
+@token_required
 def get_instalacion_detalle(instalacion_id):
     conn = get_db_connection()
-    # Usa tu función get_instalacion_completa
-    instalacion = database.get_instalacion_completa(conn, instalacion_id)
+    instalacion = database.get_instalacion_completa(conn, instalacion_id, g.user_id)
     conn.close()
     if instalacion:
-        return jsonify(instalacion) # get_instalacion_completa ya devuelve un dict
-    return jsonify({'error': 'Instalación no encontrada'}), 404
+        return jsonify(instalacion)
+    return jsonify({'error': 'Instalación no encontrada o no pertenece a este usuario'}), 404
+
 
 @bp_api.route('/instalaciones', methods=['POST'])
 
 @token_required # ¡Aplica el decorador!
 def create_instalacion():
-    data = request.json # 'data' es ahora un diccionario plano
-    if not data or not data.get('descripcion'):
+    data = request.json
+    data['app_user_id'] = g.user_id
+    
+    if not data.get('descripcion'):
         return jsonify({'error': 'Falta la descripción del proyecto'}), 400
-
+    
     conn = None
     try:
         conn = get_db_connection()
-        # Pasamos el diccionario completo a la función de la DB
         new_id, message = database.add_instalacion(conn, data)
-        
         if new_id is not None:
             conn.commit()
             return jsonify({'id': new_id, 'message': message}), 201
@@ -63,66 +59,54 @@ def create_instalacion():
             conn.rollback()
             return jsonify({'error': message}), 400
     except Exception as e:
-        if conn: 
-            conn.rollback() 
-    if new_id:
-        return jsonify({'id': new_id, 'message': 'Instalación creada'}), 201
-    return jsonify({'error': 'Error al crear instalación'}), 400
+        if conn: conn.rollback()
+        current_app.logger.error(f"Excepción en create_instalacion: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
+    finally:
+        if conn: conn.close()
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['PUT'])
 
 @token_required # ¡Aplica el decorador!
 def update_instalacion_endpoint(instalacion_id):
-    data = request.json # 'data' es un diccionario plano
+    data = request.json
     conn = None
-        # --- LOGGING DE DEPURACIÓN AÑADIDO ---
-    current_app.logger.info(f"Recibida petición PUT para ID {instalacion_id}.")
-    current_app.logger.info(f"BODY RECIBIDO: {json.dumps(data, indent=2)}")
-    # ------------------------------------
-
-    # Validación básica
-    if not data:
-        return jsonify({'error': 'No se recibieron datos en el cuerpo de la petición'}), 400
-
     try:
         conn = get_db_connection()
-        # Pasamos el diccionario completo
-        success, message = database.update_instalacion(conn, instalacion_id, data)
-        
+        # La función de DB debe verificar que la instalación pertenece al usuario
+        success, message = database.update_instalacion(conn, instalacion_id, g.user_id, data)
         if success:
             conn.commit()
-            return jsonify({'message': message}), 200
+            return jsonify({'message': 'Proyecto actualizado'}), 200
         else:
             conn.rollback()
             return jsonify({'error': message}), 400
     except Exception as e:
-        if conn: # Si la conexión aún está abierta y hay un error, hacer rollback
-            conn.rollback()
-        current_app.logger.error(f"Excepción al actualizar instalación ID {instalacion_id}: {e}", exc_info=True)
-        return jsonify({'error': 'Error interno del servidor al actualizar instalación.'}), 500
+        if conn: conn.rollback()
+        current_app.logger.error(f"Excepción en update_instalacion: {e}", exc_info=True)
+        return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['DELETE']) # <--- DEBE TENER EL ID Y 'DELETE'
 
 @token_required # ¡Aplica el decorador!
-def delete_instalacion_api(instalacion_id): # Renombrado para claridad
+def delete_instalacion_api(instalacion_id):
     conn = get_db_connection()
     try:
-        # Asume que delete_instalacion devuelve (True/False, "mensaje")
-        success, message = database.delete_instalacion(conn, instalacion_id)
+        # La función de DB debe verificar que la instalación pertenece al usuario
+        success, message = database.delete_instalacion(conn, instalacion_id, g.user_id)
         if success:
-            return jsonify({'message': message}), 200
+            conn.commit()
+            return jsonify({'message': 'Instalación eliminada'}), 200
         else:
-            # Error al eliminar (ej. no encontrado, o dependencia si no se maneja en BD)
-            return jsonify({'error': message or 'Error al eliminar instalación'}), 400 # o 404
+            conn.rollback()
+            return jsonify({'error': message}), 400
     except Exception as e:
-        current_app.logger.error(f"Error en delete_instalacion_api (id: {instalacion_id}): {e}")
+        if conn: conn.rollback()
         return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
-        if conn:
-            conn.close()
+        if conn: conn.close()
 
 # --- Endpoint para generar documentos ---
 # @bp_api.route('/instalaciones/<int:instalacion_id>/generate-docs', methods=['POST'])
@@ -820,12 +804,9 @@ def delete_product(product_type, item_id):
 
 @bp_api.route('/clientes', methods=['GET']) # RUTA CAMBIADA
 @token_required
-def get_clientes(): # NOMBRE DE FUNCIÓN CAMBIADO
-    # TEMPORAL: Usamos un ID de usuario fijo para depurar
-    app_user_id_fijo = "7978ca1c-503d-4550-8d04-3aa01d9113ba" # Tu ID de usuario de Supabase
+def get_clientes():
     conn = get_db_connection()
-    # Llamada a la función de DB renombrada
-    clientes = database.get_all_clientes(conn, app_user_id_fijo) 
+    clientes = database.get_all_clientes(conn, g.user_id)
     conn.close()
     return jsonify(clientes)
 
@@ -838,12 +819,5 @@ def get_current_user():
     Devuelve el ID del usuario autenticado que viene en el token.
     Sirve para probar que la autenticación funciona.
     """
-    # El decorador @token_required ya ha validado el token
-    # y ha guardado el ID del usuario en g.user_id
-    # TEMPORAL: Usamos un ID de usuario fijo para depurar
-    app_user_id_fijo = "7978ca1c-503d-4550-8d04-3aa01d9113ba" # Tu ID de usuario de Supabase
-    user_id = g.user_id
-    return jsonify({
-        "message": "Autenticación exitosa",
-        "user_id": app_user_id_fijo 
-    }), 200
+    
+    return jsonify({"message": "Autenticación exitosa", "user_id": g.user_id}), 200

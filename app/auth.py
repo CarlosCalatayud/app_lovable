@@ -7,6 +7,22 @@ from flask import request, jsonify, g, current_app
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+                # --- MODO DE DEPURACIÓN (BYPASS DE AUTENTICACIÓN) ---
+        # Comprueba si la variable de entorno para desactivar la auth está activada
+        if os.environ.get('DISABLE_AUTH') == 'true':
+            current_app.logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            current_app.logger.warning("!!! ADVERTENCIA: LA AUTENTICACIÓN ESTÁ DESACTIVADA !!!")
+            current_app.logger.warning("!!! USANDO ID DE USUARIO DE PRUEBA FIJO. !!!")
+            current_app.logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            
+            # Asigna un ID de usuario fijo para todas las peticiones
+            g.user_id = "7978ca1c-503d-4550-8d04-3aa01d9113ba" # <-- USA TU PROPIO ID DE USUARIO DE SUPABASE AQUÍ
+            
+            # Llama directamente a la función del endpoint sin verificar token
+            return f(*args, **kwargs)
+        # --- FIN DEL MODO DE DEPURACIÓN ---
+
+
         token = None
         auth_header = request.headers.get('Authorization')
         
@@ -44,7 +60,12 @@ def token_required(f):
                 return jsonify({'message': 'Error de configuración del servidor'}), 500
 
             # Decodifica el token usando el secreto y el algoritmo correcto
-            data = jwt.decode(token, jwt_secret, algorithms=["HS256"])
+            data = jwt.decode(
+                token,
+                jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated"  # <-- AÑADIMOS ESTA LÍNEA
+            )
             app_user_id_fijo = "7978ca1c-503d-4550-8d04-3aa01d9113ba" # Tu ID de usuario de Supabase 
             g.user_id = app_user_id_fijo
             #data['sub']
