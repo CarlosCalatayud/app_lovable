@@ -21,9 +21,14 @@ def get_db_connection():
 
 @token_required
 def get_instalaciones():
+    # Obtenemos el parámetro 'ciudad' de la URL, ej: /api/instalaciones?ciudad=Madrid
+    ciudad_filtro = request.args.get('ciudad', None)
+    
     conn = get_db_connection()
-    instalaciones = database.get_all_instalaciones(conn, g.user_id)
+    # Pasamos el filtro de ciudad a la función de la base de datos
+    instalaciones = database.get_all_instalaciones(conn, g.user_id, ciudad=ciudad_filtro)
     conn.close()
+    
     return jsonify(instalaciones)
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['GET'])
@@ -88,94 +93,31 @@ def update_instalacion_endpoint(instalacion_id):
     finally:
         if conn: conn.close()
 
-@bp_api.route('/instalaciones/<int:instalacion_id>', methods=['DELETE']) # <--- DEBE TENER EL ID Y 'DELETE'
-
-@token_required # ¡Aplica el decorador!
+@bp_api.route('/instalaciones/<int:instalacion_id>', methods=['DELETE'])
+@token_required
 def delete_instalacion_api(instalacion_id):
-    conn = get_db_connection()
+    conn = None
     try:
-        # La función de DB debe verificar que la instalación pertenece al usuario
+        conn = get_db_connection()
+        # Pasamos el ID de la instalación y el ID del propietario para seguridad
         success, message = database.delete_instalacion(conn, instalacion_id, g.user_id)
+        
         if success:
             conn.commit()
-            return jsonify({'message': 'Instalación eliminada'}), 200
+            return jsonify({'message': 'Instalación eliminada correctamente'}), 200
         else:
             conn.rollback()
-            return jsonify({'error': message}), 400
+            # Esto puede ocurrir si el ID no existe o no pertenece al usuario
+            return jsonify({'error': message}), 404
+            
     except Exception as e:
         if conn: conn.rollback()
+        current_app.logger.error(f"Excepción en delete_instalacion_api: {e}", exc_info=True)
         return jsonify({'error': 'Error interno del servidor'}), 500
     finally:
         if conn: conn.close()
 
-# --- Endpoint para generar documentos ---
-# @bp_api.route('/instalaciones/<int:instalacion_id>/generate-docs', methods=['POST'])
-# def generate_docs_api(instalacion_id):
-#     # En el futuro, podrías pasar qué documentos generar en el request.json
-#     # doc_types_to_generate = request.json.get('documentos', [])
 
-#     conn = get_db_connection()
-#     instalacion_completa = database.get_instalacion_completa(conn, instalacion_id)
-
-#     if not instalacion_completa:
-#         conn.close()
-#         return jsonify({"error": "Instalación no encontrada"}), 404
-
-#     # 'instalacion_completa' es el 'user_inputs' para calculations
-#     # y ya contiene datos_tecnicos como un dict
-#     # Asegúrate que los nombres de las claves en instalacion_completa coincidan
-#     # con lo que espera calculate_all_derived_data
-    
-#     # Si 'datos_tecnicos' está anidado:
-#     user_inputs_for_calc = instalacion_completa.get('datos_tecnicos', {})
-#     # Añade otros campos necesarios para los cálculos que están al nivel superior
-#     user_inputs_for_calc.update({
-#         k: v for k, v in instalacion_completa.items() if k != 'datos_tecnicos'
-#     })
-    
-#     # O si `calculate_all_derived_data` espera que `user_inputs` sea el dict plano
-#     # que se guardaba como JSON (y que ahora es `instalacion_completa['datos_tecnicos']`)
-#     # más los datos de las entidades relacionadas:
-#     # Deberás reestructurar `user_inputs_for_calc` para que tenga la forma
-#     # que `calculate_all_derived_data` espera. Esto es CRUCIAL.
-#     # Probablemente `user_inputs_for_calc` deba ser el `datos_tecnicos_dict`
-#     # más los datos de las entidades (cliente, promotor, instalador) y de la propia instalación.
-
-#     # Ejemplo: Asumiendo que calculations.py espera un dict plano:
-#     context_dict = {}
-#     context_dict.update(instalacion_completa.get('datos_tecnicos', {}))
-#     print("instalacion completa values", instalacion_completa.values())
-#     print("instalacion completa items", instalacion_completa.items())
-#     context_dict.update({ # Añadir datos de entidades y generales
-#         'descripcion_instalacion': instalacion_completa.get('descripcion'),
-#         'fecha_creacion_instalacion': instalacion_completa.get('fecha_creacion'),
-#         'nombre_cliente': instalacion_completa.get('nombre_cliente'),
-#         # ... y así sucesivamente para todos los datos de entidades
-#         # que se usan directamente en las plantillas o en los cálculos
-#     })
-
-#     # Llamar a los cálculos
-#     calculated_data = calculations.calculate_all_derived_data(context_dict, conn)
-#     conn.close() # Cerramos la conexión después de los cálculos
-
-#     # Combinar datos originales y calculados para la plantilla
-#     final_context = {**context_dict, **calculated_data}
-
-#     # Lógica de generación de documentos (simplificada)
-#     # Deberías tener una lista de plantillas y nombres de salida
-#     template_name = "CERTIFICADO FIN DE OBRA.docx" # Esto debería ser dinámico
-#     template_path = os.path.join(current_app.config['TEMPLATES_PATH'], template_name)
-#     output_filename = f"documento_instalacion_{instalacion_id}_{template_name}"
-#     output_path = os.path.join(current_app.config['OUTPUT_DOCS_PATH'], output_filename)
-
-#     success_generation = doc_generator.fill_template_docxtpl(template_path, output_path, final_context)
-
-#     if success_generation:
-#         # Ofrecer el archivo para descarga
-#         return send_file(output_path, as_attachment=True)
-#     else:
-#         return jsonify({"error": "Error al generar el documento"}), 500
-# NUEVO Endpoint para generar documentos seleccionados
 @bp_api.route('/instalaciones/<int:instalacion_id>/generate-selected-docs', methods=['POST'])
 
 @token_required # ¡Aplica el decorador!

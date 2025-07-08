@@ -445,11 +445,28 @@ def update_instalacion(conn, instalacion_id, app_user_id, data_dict): # <-- AÑA
 
     return _execute_update_delete(conn, sql, tuple(values))
 
+def delete_instalacion(conn, instalacion_id, app_user_id):
+    """Elimina una instalación, verificando que pertenece al usuario de la app."""
+    sql = "DELETE FROM instalaciones WHERE id = ? AND app_user_id = ?"
+    return _execute_update_delete(conn, sql, (instalacion_id, app_user_id))
 
-def get_all_instalaciones(conn, app_user_id): # <-- AÑADIMOS app_user_id
-    """Obtiene todas las instalaciones PERTENECIENTES a un usuario de la app."""
-    sql = "SELECT id, descripcion, fecha_creacion FROM instalaciones WHERE app_user_id = ? ORDER BY fecha_creacion DESC"
-    return _execute_select(conn, sql, (app_user_id,)) # <-- USAMOS app_user_id en la query
+
+def get_all_instalaciones(conn, app_user_id, ciudad=None):
+    """
+    Obtiene todas las instalaciones de un usuario, con filtrado opcional por ciudad.
+    """
+    params = [app_user_id]
+    sql = "SELECT id, descripcion, fecha_creacion, provincia, localidad FROM instalaciones WHERE app_user_id = ?"
+    
+    if ciudad:
+        # Usamos LIKE para búsquedas parciales (ej: 'mad' encuentra 'Madrid')
+        # y lower() para que no distinga mayúsculas/minúsculas.
+        sql += " AND lower(localidad) LIKE ?"
+        params.append(f"%{ciudad.lower()}%")
+        
+    sql += " ORDER BY fecha_creacion DESC"
+    
+    return _execute_select(conn, sql, tuple(params))
 
 def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
     # Lista de validación para seguridad
