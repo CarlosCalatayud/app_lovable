@@ -195,7 +195,7 @@ def generate_selected_docs_api(instalacion_id):
 
     try:
         conn = get_db_connection()
-        instalacion_completa = database.get_instalacion_completa(conn, instalacion_id)
+        instalacion_completa = database.get_instalacion_completa(conn, instalacion_id, g.user_id)
         if not instalacion_completa:
             return jsonify({"error": "Instalación no encontrada"}), 404
 
@@ -548,7 +548,7 @@ def create_instalador():
     # --- LÍNEA CLAVE AÑADIDA ---
     data['app_user_id'] = g.user_id
     # ---------------------------
-    
+
     conn = None # Inicializamos a None
     try:
         conn = get_db_connection()
