@@ -442,6 +442,10 @@ def create_promotor():
     if not data or not data.get('nombre_razon_social') or not data.get('dni_cif'):
         return jsonify({'error': 'Faltan campos obligatorios: nombre_razon_social y dni_cif'}), 400
 
+    # --- LÍNEA CLAVE AÑADIDA ---
+    data['app_user_id'] = g.user_id
+    # ---------------------------
+
     conn = None
     try:
         conn = get_db_connection()
@@ -541,6 +545,10 @@ def create_instalador():
     if not data or not data.get('nombre_empresa') or not data.get('cif_empresa'):
         return jsonify({'error': 'Faltan campos obligatorios: nombre_empresa y cif_empresa'}), 400
 
+    # --- LÍNEA CLAVE AÑADIDA ---
+    data['app_user_id'] = g.user_id
+    # ---------------------------
+    
     conn = None # Inicializamos a None
     try:
         conn = get_db_connection()
