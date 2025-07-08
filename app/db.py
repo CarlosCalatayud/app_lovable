@@ -416,8 +416,8 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id): # <-- AÑADIMOS
     """ # <-- AÑADIMOS la condición de seguridad
     return _execute_select(conn, sql, (instalacion_id, app_user_id), one=True)
 
-def update_instalacion(conn, instalacion_id, data_dict):
-    """Actualiza una instalación usando un diccionario de datos."""
+def update_instalacion(conn, instalacion_id, app_user_id, data_dict): # <-- AÑADIMOS app_user_id
+    """Actualiza una instalación, verificando que pertenece al usuario de la app."""
     fields = [
         'descripcion', 'cliente_id', 'promotor_id', 'instalador_id',
         'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
@@ -425,21 +425,26 @@ def update_instalacion(conn, instalacion_id, data_dict):
         'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
         'inversor', 'numero_inversores', 'bateria', 'numero_baterias',
         'distribuidora', 'cups', 'potencia_contratada_w',
-        # Nuevos campos
         'tipo_de_estructura', 'tipo_de_cubierta', 'material_cableado',
         'longitud_cable_cc_string1', 'seccion_cable_ac_mm2', 'longitud_cable_ac_m',
         'protector_sobretensiones', 'diferencial_a', 'sensibilidad_ma'
     ]
 
-
     fields_to_update = [f for f in fields if f in data_dict]
+    if not fields_to_update:
+        return False, "No se proporcionaron campos para actualizar."
+
     values = [data_dict[f] for f in fields_to_update]
     values.append(instalacion_id)
+    values.append(app_user_id) # <-- AÑADIMOS el app_user_id a la lista de valores
 
     set_clause = ', '.join([f"{field} = ?" for field in fields_to_update])
-    sql = f"UPDATE instalaciones SET {set_clause} WHERE id = ?"
+    
+    # La cláusula WHERE ahora comprueba tanto el ID de la instalación como el del propietario
+    sql = f"UPDATE instalaciones SET {set_clause} WHERE id = ? AND app_user_id = ?"
 
     return _execute_update_delete(conn, sql, tuple(values))
+
 
 def get_all_instalaciones(conn, app_user_id): # <-- AÑADIMOS app_user_id
     """Obtiene todas las instalaciones PERTENECIENTES a un usuario de la app."""
