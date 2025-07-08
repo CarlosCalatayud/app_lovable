@@ -359,6 +359,7 @@ def create_cliente_api():
     try:
         conn = get_db_connection()
         new_id, message = database.add_cliente(conn,
+                                            data.get('app_user_id'),
                                             data.get('nombre'),
                                             data.get('apellidos'),
                                             data.get('dni'),
@@ -445,6 +446,7 @@ def create_promotor():
     try:
         conn = get_db_connection()
         new_id, message = database.add_promotor(conn,
+                                            data.get('app_user_id'), # Asignar el ID del usuario actual
                                             data.get('nombre_razon_social'),
                                             data.get('apellidos'),
                                             data.get('direccion_fiscal'),
@@ -543,6 +545,7 @@ def create_instalador():
     try:
         conn = get_db_connection()
         new_id, message = database.add_instalador(conn,
+                                            data.get('app_user_id'), # Asignar el ID del usuario actual
                                             data.get('nombre_empresa'),
                                             data.get('direccion_empresa'),
                                             data.get('cif_empresa'),
