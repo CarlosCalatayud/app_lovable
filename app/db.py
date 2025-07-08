@@ -302,13 +302,14 @@ def _execute_select(conn, sql, params=None, one=False):
             return [] # NUNCA DEVOLVER None, SIEMPRE UNA LISTA VACÍA
 
 # --- clientes ---
-def add_cliente(conn, nombre, apellidos, dni, direccion):
-    sql = "INSERT INTO clientes (nombre, apellidos, dni, direccion) VALUES (?, ?, ?, ?)"
-    return _execute_insert(conn, sql, (nombre, apellidos, dni, direccion))
+def add_cliente(conn, app_user_id, nombre, apellidos, dni, direccion):
+    sql = "INSERT INTO clientes (app_user_id, nombre, apellidos, dni, direccion) VALUES (?, ?, ?, ?, ?)"
+    return _execute_insert(conn, sql, (app_user_id, nombre, apellidos, dni, direccion))
 
-def get_all_clientes(conn):
-    return _execute_select(conn, "SELECT * FROM clientes ORDER BY nombre, apellidos")
-
+# POR ESTO:
+def get_all_clientes(conn, app_user_id): # <-- AÑADIMOS app_user_id
+    sql = "SELECT * FROM clientes WHERE app_user_id = ? ORDER BY nombre, apellidos"
+    return _execute_select(conn, sql, (app_user_id,))
 def update_cliente(conn, cliente_id, nombre, apellidos, dni, direccion):
     sql = "UPDATE clientes SET nombre = ?, apellidos = ?, dni = ?, direccion = ? WHERE id = ?"
     return _execute_update_delete(conn, sql, (nombre, apellidos, dni, direccion, cliente_id))
@@ -327,15 +328,16 @@ def get_cliente_by_id(conn, cliente_id):
 
 # ... (Repite el patrón para promotores, instaladores, etc.) ...
 # --- promotores ---
-def add_promotor(conn, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
-    sql = "INSERT INTO promotores (nombre_razon_social, apellidos, direccion_fiscal, dni_cif) VALUES (?, ?, ?, ?)"
-    return _execute_insert(conn, sql, (nombre_razon_social, apellidos, direccion_fiscal, dni_cif))
+def add_promotor(conn, app_user_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
+    sql = "INSERT INTO promotores (app_user_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif) VALUES (?, ?, ?, ?, ?)"
+    return _execute_insert(conn, sql, (app_user_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif))
 def get_promotor_by_id(conn, promotor_id):
     """Obtiene un único promotor por su ID."""
     sql = "SELECT * FROM promotores WHERE id = ?"
     return _execute_select(conn, sql, (promotor_id,), one=True)
-def get_all_promotores(conn):
-    return _execute_select(conn, "SELECT * FROM promotores ORDER BY nombre_razon_social, apellidos")
+def get_all_promotores(conn, app_user_id): # <-- AÑADIMOS app_user_id
+    sql = "SELECT * FROM promotores WHERE app_user_id = ? ORDER BY nombre_razon_social"
+    return _execute_select(conn, sql, (app_user_id,))
 def update_promotor(conn, promotor_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
     sql = "UPDATE promotores SET nombre_razon_social = ?, apellidos = ?, direccion_fiscal = ?, dni_cif = ? WHERE id = ?"
     return _execute_update_delete(conn, sql, (nombre_razon_social, apellidos, direccion_fiscal, dni_cif, promotor_id))
@@ -347,11 +349,12 @@ def delete_promotor(conn, promotor_id):
     return _execute_update_delete(conn, "DELETE FROM promotores WHERE id = ?", (promotor_id,))
 
 # --- instaladores ---
-def add_instalador(conn, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico):
-    sql = "INSERT INTO instaladores (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico) VALUES (?, ?, ?, ?, ?)"
-    return _execute_insert(conn, sql, (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico))
-def get_all_instaladores(conn):
-    return _execute_select(conn, "SELECT * FROM instaladores ORDER BY nombre_empresa")
+def add_instalador(conn, app_user_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico):
+    sql = "INSERT INTO instaladores (app_user_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico) VALUES (?, ?, ?, ?, ?, ?)"
+    return _execute_insert(conn, sql, (app_user_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico))
+def get_all_instaladores(conn, app_user_id): # <-- AÑADIMOS app_user_id
+    sql = "SELECT * FROM instaladores WHERE app_user_id = ? ORDER BY nombre_empresa"
+    return _execute_select(conn, sql, (app_user_id,))
 def update_instalador(conn, instalador_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico):
     sql = "UPDATE instaladores SET nombre_empresa = ?, direccion_empresa = ?, cif_empresa = ?, nombre_tecnico = ?, competencia_tecnico = ? WHERE id = ?"
     return _execute_update_delete(conn, sql, (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico, instalador_id))
@@ -371,6 +374,7 @@ def add_instalacion(conn, data_dict):
     """Añade una nueva instalación usando un diccionario de datos."""
     # Lista de todas las columnas que podemos insertar
     fields = [
+        'app_user_id',
         'descripcion', 'cliente_id', 'promotor_id', 'instalador_id',
         'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
         'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
@@ -436,15 +440,10 @@ def update_instalacion(conn, instalacion_id, data_dict):
 
     return _execute_update_delete(conn, sql, tuple(values))
 
-def get_all_instalaciones(conn):
-    """
-    Obtiene una lista simplificada de todas las instalaciones para la vista principal.
-    """
-    # Usamos nuestra función de ayuda _execute_select
-    # Asegúrate de que los nombres de tablas y columnas estén en minúsculas.
-    sql = "SELECT id, descripcion, fecha_creacion FROM instalaciones ORDER BY fecha_creacion DESC"
-    return _execute_select(conn, sql)
-
+def get_all_instalaciones(conn, app_user_id): # <-- AÑADIMOS app_user_id
+    """Obtiene todas las instalaciones PERTENECIENTES a un usuario de la app."""
+    sql = "SELECT id, descripcion, fecha_creacion FROM instalaciones WHERE app_user_id = ? ORDER BY fecha_creacion DESC"
+    return _execute_select(conn, sql, (app_user_id,)) # <-- USAMOS app_user_id en la query
 
 def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
     # Lista de validación para seguridad
