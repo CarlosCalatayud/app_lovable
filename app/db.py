@@ -397,12 +397,14 @@ def add_instalacion(conn, data_dict):
     
     return _execute_insert(conn, sql, tuple(values_to_insert))
 
-def get_instalacion_completa(conn, instalacion_id):
-    """Obtiene todos los datos de una instalación, ahora sin procesar JSON."""
-    # La query ahora es más simple porque no hay JSON que parsear
+def get_instalacion_completa(conn, instalacion_id, app_user_id): # <-- AÑADIMOS app_user_id
+    """
+    Obtiene todos los datos de una instalación específica,
+    verificando que pertenece al usuario de la app.
+    """
     sql = """
     SELECT
-        I.*, -- Seleccionamos TODAS las columnas de la tabla instalaciones
+        I.*,
         U.nombre as cliente_nombre, U.apellidos as cliente_apellidos, U.dni as cliente_dni,
         P.nombre_razon_social as promotor_nombre, P.dni_cif as promotor_cif,
         INS.nombre_empresa as instalador_empresa, INS.cif_empresa as instalador_cif
@@ -410,10 +412,9 @@ def get_instalacion_completa(conn, instalacion_id):
     LEFT JOIN clientes U ON I.cliente_id = U.id
     LEFT JOIN promotores P ON I.promotor_id = P.id
     LEFT JOIN instaladores INS ON I.instalador_id = INS.id
-    WHERE I.id = ?
-    """
-    # _execute_select ya devuelve un diccionario, así que no hay que hacer nada más
-    return _execute_select(conn, sql, (instalacion_id,), one=True)
+    WHERE I.id = ? AND I.app_user_id = ? 
+    """ # <-- AÑADIMOS la condición de seguridad
+    return _execute_select(conn, sql, (instalacion_id, app_user_id), one=True)
 
 def update_instalacion(conn, instalacion_id, data_dict):
     """Actualiza una instalación usando un diccionario de datos."""
