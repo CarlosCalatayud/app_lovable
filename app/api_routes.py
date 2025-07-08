@@ -472,7 +472,7 @@ def create_promotor():
 @token_required # ¡Aplica el decorador!
 def get_promotores():
     conn = get_db_connection()
-    promotores = database.get_all_promotores(conn)
+    promotores = database.get_all_promotores(conn, g.user_id)
     conn.close()
     return jsonify(promotores)
 
@@ -573,7 +573,7 @@ def create_instalador():
 @token_required # ¡Aplica el decorador!
 def get_instaladores():
     conn = get_db_connection()
-    instaladores = database.get_all_instaladores(conn)
+    instaladores = database.get_all_instaladores(conn, g.user_id)
     conn.close()
 
     # --- LÍNEAS DE DEPURACIÓN AÑADIDAS ---
