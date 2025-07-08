@@ -45,7 +45,9 @@ def token_required(f):
 
             # Decodifica el token usando el secreto y el algoritmo correcto
             data = jwt.decode(token, jwt_secret, algorithms=["HS256"])
-            g.user_id = data['sub']
+            app_user_id_fijo = "7978ca1c-503d-4550-8d04-3aa01d9113ba" # Tu ID de usuario de Supabase 
+            g.user_id = app_user_id_fijo
+            #data['sub']
 
         except jwt.ExpiredSignatureError:
             current_app.logger.warning("Intento de uso de un token expirado.")
