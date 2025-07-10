@@ -5,6 +5,8 @@ from . import db as database # Importa el módulo y le da el alias 'database'
 from . import calc as calculations # Importa el módulo de cálculos
 from .generation import doc_generator
 from .auth import token_required # Importa el decorador
+from .calculator import ElectricalCalculator # <-- 1. IMPORTA LA NUEVA CLASE
+
 
 import os
 import io # Para trabajar con bytes en memoria
@@ -774,3 +776,39 @@ def get_current_user():
     """
     
     return jsonify({"message": "Autenticación exitosa", "user_id": g.user_id}), 200
+
+
+# --- NUEVO ENDPOINT PARA LA CALCULADORA ELÉCTRICA ---
+@bp_api.route('/calculator/voltage-drop', methods=['POST'])
+@token_required # Protegemos el endpoint, ya que es una funcionalidad de la app
+def calculate_voltage_drop_endpoint():
+    """
+    Endpoint para calcular la caída de tensión.
+    Recibe un JSON con todos los parámetros y lo pasa a la calculadora.
+    """
+    data = request.json
+    if not data:
+        return jsonify({"error": "No se recibieron datos en la petición."}), 400
+
+    # Creamos una instancia de nuestra calculadora
+    calculator = ElectricalCalculator()
+    
+    try:
+        # Llamamos a la función de cálculo pasando los parámetros requeridos
+        result = calculator.calculate_voltage_drop(
+            current=data.get('current'),
+            length=data.get('length'),
+            wire_cross_section=data.get('wire_cross_section'),
+            material=data.get('material'),
+            system_type=data.get('system_type'),
+            source_voltage=data.get('source_voltage'),
+            power_factor=data.get('power_factor', 1.0) # Usamos el default si no viene
+        )
+        return jsonify(result), 200
+    except ValueError as e:
+        # Capturamos los errores de validación y los devolvemos como un 400
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        # Capturamos cualquier otro error inesperado
+        current_app.logger.error(f"Error inesperado en la calculadora: {e}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
