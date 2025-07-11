@@ -24,6 +24,126 @@ class ElectricalCalculator:
         '17': 1.04, '18': 0.823, '19': 0.653, '20': 0.518
     }
 
+        # --- NUEVA ESTRUCTURA DE DATOS PARA LA TABLA UNE ---
+    IZ_TABLE_UNE = {
+        # Formato: { 'metodo': { 'aislamiento': { num_conductores: { seccion: Iz } } } }
+        'A1': {
+            'PVC': {
+                2: {1.5: 11, 2.5: 15, 4: 20, 6: 25, 10: 33},
+                3: {1.5: 11.5, 2.5: 15.5, 4: 20, 6: 26, 10: 36}
+            },
+            'XLPE/EPR': {
+                2: {1.5: 14.5, 2.5: 20, 4: 26, 6: 34, 10: 45},
+                3: {1.5: 15.5, 2.5: 21, 4: 27, 6: 35, 10: 47}
+            }
+        },
+        'A2': {
+            'PVC': {
+                2: {1.5: 12.5, 2.5: 17, 4: 22, 6: 29},
+                3: {1.5: 13.5, 2.5: 18, 4: 24, 6: 31}
+            },
+            'XLPE/EPR': {
+                2: {1.5: 16, 2.5: 22, 4: 29, 6: 37},
+                3: {1.5: 17.5, 2.5: 23, 4: 30, 6: 39}
+            }
+        },
+        'B1': {
+            'PVC': {
+                2: {1.5: 16.5, 2.5: 23, 4: 31, 6: 40, 10: 54, 16: 72, 25: 91, 35: 109, 50: 133, 70: 170, 95: 204, 120: 228},
+                3: {1.5: 14.5, 2.5: 20, 4: 27, 6: 34, 10: 46, 16: 60, 25: 75, 35: 90, 50: 110, 70: 139, 95: 164, 120: 184}
+            }
+        },
+        'B2': {
+            'PVC': {
+                2: {1.5: 15.5, 2.5: 21, 4: 28, 6: 36, 10: 49, 16: 65, 25: 80, 35: 96, 50: 114, 70: 143},
+                3: {1.5: 13.5, 2.5: 18, 4: 24, 6: 31, 10: 42, 16: 55, 25: 68, 35: 81, 50: 96, 70: 121}
+            },
+            'XLPE/EPR': {
+                2: {1.5: 21, 2.5: 28, 4: 36, 6: 46, 10: 63, 16: 85},
+                3: {1.5: 18.5, 2.5: 25, 4: 32, 6: 41, 10: 55, 16: 73}
+            }
+        },
+        'C': {
+            'PVC': {
+                2: {1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 75, 25: 94, 35: 113, 50: 134, 70: 171, 95: 207, 120: 234, 150: 269, 185: 308, 240: 364},
+                3: {1.5: 15.5, 2.5: 21, 4: 28, 6: 36, 10: 50, 16: 66, 25: 82, 35: 100, 50: 119, 70: 151, 95: 182, 120: 207, 150: 239, 185: 275, 240: 328}
+            },
+            'XLPE/EPR': {
+                2: {1.5: 23, 2.5: 32, 4: 42, 6: 54, 10: 73, 16: 98, 25: 122, 35: 147, 50: 174, 70: 222, 95: 268, 120: 304, 150: 348, 185: 399, 240: 471},
+                3: {1.5: 20, 2.5: 28, 4: 37, 6: 47, 10: 64, 16: 85, 25: 106, 35: 128, 50: 153, 70: 195, 95: 235, 120: 266, 150: 305, 185: 350, 240: 419}
+            }
+        },
+        'E': {
+            'PVC': {
+                2: {1.5: 19.5, 2.5: 27, 4: 36, 6: 46, 10: 63, 16: 85, 25: 108, 35: 130, 50: 151, 70: 192, 95: 232, 120: 262, 150: 299, 185: 340, 240: 401},
+                3: {1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 56, 16: 75, 25: 95, 35: 114, 50: 132, 70: 167, 95: 201, 120: 227, 150: 258, 185: 293, 240: 345}
+            },
+            'XLPE/EPR': {
+                2: {1.5: 26, 2.5: 36, 4: 48, 6: 61, 10: 83, 16: 110, 25: 139, 35: 167, 50: 195, 70: 249, 95: 299, 120: 337, 150: 384, 185: 436, 240: 513},
+                3: {1.5: 23, 2.5: 32, 4: 42, 6: 53, 10: 72, 16: 97, 25: 122, 35: 147, 50: 172, 70: 218, 95: 261, 120: 294, 150: 334, 185: 379, 240: 445}
+            }
+        },
+        'F': {
+            'PVC': {
+                3: {25: 110, 35: 135, 50: 153, 70: 188, 95: 220, 120: 243, 150: 276, 185: 312, 240: 367}
+            }
+        }
+    }
+
+        # --- TABLAS PARA FACTORES DE CORRECCIÓN ---
+    KT_TABLE_TEMP = { # Tabla 52-C1 de la UNE
+        # 'aislamiento': { temperatura: Kt }
+        'PVC': {10: 1.22, 15: 1.17, 20: 1.12, 25: 1.06, 30: 1.00, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71, 55: 0.61, 60: 0.50},
+        'XLPE/EPR': {10: 1.15, 15: 1.12, 20: 1.08, 25: 1.04, 30: 1.00, 35: 0.96, 40: 0.91, 45: 0.87, 50: 0.82, 55: 0.76, 60: 0.71, 65: 0.65, 70: 0.58, 75: 0.50, 80: 0.41}
+    }
+    
+    KA_TABLE_AGRUPACION = { # Tabla 52-C1 de la UNE (Ejemplo para Método C)
+        # num_circuitos: Ka
+        1: 1.00, 2: 0.80, 3: 0.70, 4: 0.65, 5: 0.60, 6: 0.57, 7: 0.54, 8: 0.52, 9: 0.50
+    }
+
+
+        # --- NUEVA FUNCIÓN DE BÚSQUEDA Iz ---
+    def get_iz_from_table(
+        self,
+        seccion: float,
+        material: Literal['cobre', 'aluminio'],
+        metodo_instalacion: str,
+        aislamiento: Literal['PVC', 'XLPE/EPR'],
+        num_conductores: int
+    ) -> float:
+        """Busca la Intensidad Máxima Admisible (Iz) en la tabla UNE."""
+        
+        # 1. Buscar el valor base para Cobre en la tabla
+        try:
+            # Seleccionamos la sub-tabla correcta
+            metodo_data = self.IZ_TABLE_UNE[metodo_instalacion]
+            aislamiento_data = metodo_data[aislamiento]
+            iz_cobre_map = aislamiento_data[num_conductores]
+            
+            # Buscamos la sección. Si no existe la exacta, cogemos la inmediatamente inferior.
+            secciones_disponibles = sorted([s for s in iz_cobre_map.keys() if s <= seccion], reverse=True)
+            if not secciones_disponibles:
+                raise ValueError(f"Sección {seccion}mm² demasiado pequeña para el método seleccionado.")
+            
+            seccion_a_usar = secciones_disponibles[0]
+            iz_base_cobre = iz_cobre_map[seccion_a_usar]
+
+        except KeyError:
+            raise ValueError("Combinación de método, aislamiento o número de conductores no válida o no implementada en la tabla.")
+
+        # 2. Aplicar factor de corrección para el material
+        if material == 'cobre':
+            return iz_base_cobre
+        elif material == 'aluminio':
+            # El aluminio tiene aprox. el 78% de la capacidad del cobre para la misma sección
+            # Este es un factor de corrección común.
+            return iz_base_cobre * 0.78
+        else:
+            raise ValueError("Material no válido.")
+
+
+
     def _normalize_current(self, current: Dict[str, Union[float, str]]) -> float:
         """Normaliza la corriente a Amperios."""
         value = float(current['value'])
@@ -222,12 +342,62 @@ class ElectricalCalculator:
         return {"calculated_voltage": {"value": 230.0, "unit": "V", "info": f"Tensión calculada usando {method} (resultado de ejemplo)."}}
 
     def calculate_protections(self, params: Dict) -> Dict:
-        """Calcula las protecciones eléctricas adecuadas. (Placeholder)"""
-        # La lógica real aquí es muy compleja (tablas UNE, etc.)
-        return {
-            "magnetotermico": {"value": "C16", "unit": "A", "info": "Magnetotérmico recomendado (ejemplo)."},
-            "diferencial": {"value": "30", "unit": "mA", "info": "Sensibilidad del diferencial recomendada (ejemplo)."}
-        }
+        """
+        Calcula las protecciones eléctricas adecuadas basándose en Iz y factores de corrección.
+        """
+        try:
+            # 1. Obtener datos de entrada con validación
+            ib = float(params.get('corriente_empleo_ib'))
+            seccion = float(params.get('seccion_fase_cable'))
+            material = params.get('conductor')
+            aislamiento = params.get('aislamiento')
+            metodo_instalacion = params.get('metodo_instalacion')
+            temp_ambiente = int(params.get('temp_ambiente', 30))
+            num_circuitos_agrupados = int(params.get('circuitos_agrupados', 1))
+            num_conductores_cargados = int(params.get('conductores_cargados', 2))
+
+            # 2. Obtener factores de corrección (Kt y Ka)
+            # Búsqueda de Kt (Temperatura)
+            kt_map = self.KT_TABLE_TEMP.get(aislamiento, {})
+            # Buscamos la temperatura más cercana por debajo
+            temp_a_usar = max([t for t in kt_map.keys() if t <= temp_ambiente], default=None)
+            kt = kt_map.get(temp_a_usar, 1.0) # Default 1.0 si no se encuentra
+
+            # Búsqueda de Ka (Agrupamiento)
+            # Esta tabla es más compleja en la realidad, aquí usamos una simplificada
+            ka = self.KA_TABLE_AGRUPACION.get(num_circuitos_agrupados, 0.50) # Default 0.5 para >9 circuitos
+
+            # 3. Calcular Iz' (Iz corregida)
+            iz_tabla = self.get_iz_from_table(seccion, material, metodo_instalacion, aislamiento, num_conductores_cargados)
+            iz_corregida = iz_tabla * kt * ka
+            
+            # 4. Criterios de selección del magnetotérmico (In)
+            calibres_comerciales = [6, 10, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125]
+            magnetotermico_in = None
+            for calibre in calibres_comerciales:
+                if calibre >= ib and calibre <= iz_corregida:
+                    # Criterio adicional I2 <= 1.45 * Iz' (I2 ~ 1.45 * In para curva C)
+                    if (calibre * 1.45) <= (iz_corregida * 1.45):
+                        magnetotermico_in = calibre
+                        break
+            
+            if magnetotermico_in is None:
+                resultado_magnetotermico = "No se encontró calibre adecuado. Aumente la sección o revise las condiciones."
+            else:
+                curva = params.get('curva_magnetotermico', 'C')
+                resultado_magnetotermico = f"{curva}{magnetotermico_in}"
+                
+            # 5. Selección del diferencial (sin cambios)
+            tipo_diferencial = params.get('tipo_diferencial', 'A')
+            resultado_diferencial = f"Tipo {tipo_diferencial}, 30mA (recomendado)"
+
+            return {
+                "magnetotermico": {"value": resultado_magnetotermico, "unit": "A", "info": f"Magnetotérmico recomendado. Iz'={round(iz_corregida,2)}A (Kt={kt}, Ka={ka})."},
+                "diferencial": {"value": resultado_diferencial, "unit": "mA", "info": "Tipo y sensibilidad del diferencial recomendados."}
+            }
+
+        except (ValueError, TypeError, KeyError, AttributeError) as e:
+            raise ValueError(f"Error en los datos de entrada para el cálculo de protecciones: {e}")
 
     # --- CÁLCULO 6: SEPARACIÓN DE PANELES (NUEVO) ---
     def calculate_panel_separation(
