@@ -1,5 +1,7 @@
 # app/calculator.py
+# app/calculator.py
 
+import math
 from typing import Dict, Union, Literal
 
 class ElectricalCalculator:
@@ -152,5 +154,141 @@ class ElectricalCalculator:
                 "value": round(voltage_at_load_v, 2),
                 "unit": "V",
                 "info": "Tensión efectiva que llega a la carga al final del conductor."
+            }
+        }
+    
+        # --- CÁLCULO 2: SECCIÓN DE CABLE (NUEVO) ---
+    def calculate_wire_section(
+        self,
+        system_type: Literal['monofasico', 'trifasico'],
+        voltage: float,
+        power: float,
+        cos_phi: float,
+        length: float,
+        max_voltage_drop_percent: float,
+        material: Literal['cobre', 'aluminio']
+    ) -> Dict:
+        """
+        Calcula la sección mínima de cable requerida.
+        NOTA: Esto es un cálculo teórico. La sección final debe elegirse de valores comerciales
+        y verificarse con la Intensidad Máxima Admisible (Iz).
+        """
+        if max_voltage_drop_percent <= 0:
+            raise ValueError("El porcentaje de caída de tensión máxima debe ser mayor que cero.")
+            
+        max_voltage_drop_volts = voltage * (max_voltage_drop_percent / 100)
+        
+        if voltage <= 0:
+            raise ValueError("La tensión debe ser mayor que cero.")
+            
+        if system_type == 'monofasico':
+            current = power / (voltage * cos_phi)
+            rho = self.RESISTIVIDAD_COBRE if material == 'cobre' else self.RESISTIVIDAD_ALUMINIO
+            section_mm2 = (2 * length * rho * current) / max_voltage_drop_volts
+        elif system_type == 'trifasico':
+            current = power / (math.sqrt(3) * voltage * cos_phi)
+            rho = self.RESISTIVIDAD_COBRE if material == 'cobre' else self.RESISTIVIDAD_ALUMINIO
+            section_mm2 = (math.sqrt(3) * length * rho * current) / max_voltage_drop_volts
+        else:
+            raise ValueError("Tipo de sistema no válido.")
+
+        # Aquí iría la lógica para encontrar la sección comercial superior
+        # Por ahora, devolvemos el valor teórico.
+        
+        return {
+            "required_section": {
+                "value": round(section_mm2, 2),
+                "unit": "mm²",
+                "info": "Sección teórica mínima requerida para cumplir con la caída de tensión."
+            },
+            "calculated_current": {
+                "value": round(current, 2),
+                "unit": "A",
+                "info": "Corriente de cálculo para la potencia especificada."
+            }
+        }
+        
+    # --- CÁLCULO 3, 4, 5 (Corriente, Tensión, Protecciones) - Placeholder ---
+    # Estos cálculos son más complejos y dependen de tablas normativas (Iz, Kt, Ka).
+    # Por ahora, creamos funciones placeholder que devuelven resultados de ejemplo.
+    
+    def calculate_current(self, method: str, params: Dict) -> Dict:
+        """Calcula la corriente basado en diferentes métodos. (Placeholder)"""
+        # La implementación real requeriría un switch/case para 'method'
+        return {"calculated_current": {"value": 13.04, "unit": "A", "info": f"Corriente calculada usando {method} (resultado de ejemplo)."}}
+
+    def calculate_voltage(self, method: str, params: Dict) -> Dict:
+        """Calcula la tensión basado en diferentes métodos. (Placeholder)"""
+        return {"calculated_voltage": {"value": 230.0, "unit": "V", "info": f"Tensión calculada usando {method} (resultado de ejemplo)."}}
+
+    def calculate_protections(self, params: Dict) -> Dict:
+        """Calcula las protecciones eléctricas adecuadas. (Placeholder)"""
+        # La lógica real aquí es muy compleja (tablas UNE, etc.)
+        return {
+            "magnetotermico": {"value": "C16", "unit": "A", "info": "Magnetotérmico recomendado (ejemplo)."},
+            "diferencial": {"value": "30", "unit": "mA", "info": "Sensibilidad del diferencial recomendada (ejemplo)."}
+        }
+
+    # --- CÁLCULO 6: SEPARACIÓN DE PANELES (NUEVO) ---
+    def calculate_panel_separation(
+        self,
+        panel_vertical_side_m: float,
+        panel_inclination_deg: float,
+        latitude_deg: float
+    ) -> Dict:
+        """
+        Calcula la distancia mínima entre filas de paneles para evitar sombras.
+        """
+        if panel_vertical_side_m <= 0:
+            raise ValueError("El lado vertical del panel debe ser mayor que cero.")
+
+        # Convertir ángulos a radianes para los cálculos trigonométricos
+        beta = math.radians(panel_inclination_deg)
+        phi = math.radians(latitude_deg)
+        
+        # Ángulo solar en el solsticio de invierno (día más desfavorable)
+        # alpha = 90 - phi - 23.45 (fórmula simplificada)
+        # Fórmula más precisa de la altura solar (h) a mediodía solar
+        # h = arcsin(sin(δ)sin(φ) + cos(δ)cos(φ)cos(HRA))
+        # Para el mediodía HRA=0, para el solsticio de invierno δ=-23.45°
+        declinacion_invierno = math.radians(-23.45)
+        altura_solar_mediodia_rad = math.asin(
+            math.sin(declinacion_invierno) * math.sin(phi) + 
+            math.cos(declinacion_invierno) * math.cos(phi)
+        )
+        
+        if altura_solar_mediodia_rad <= 0:
+            return {
+                "d1_distance_m": {"value": float('inf'), "info": "En esta latitud, el sol no se eleva lo suficiente en invierno."},
+                "d2_distance_m": {"value": float('inf'), "info": "Sombra permanente en invierno."}
+            }
+
+        # Altura del panel (h)
+        h_panel = panel_vertical_side_m * math.sin(beta)
+        
+        # Distancia horizontal cubierta por el panel (x)
+        x_panel = panel_vertical_side_m * math.cos(beta)
+        
+        # Longitud de la sombra (L)
+        longitud_sombra = h_panel / math.tan(altura_solar_mediodia_rad)
+        
+        # Distancia D1 (desde el final de una fila al inicio de la siguiente)
+        d1 = longitud_sombra - x_panel
+        if d1 < 0: 
+            d1 = 0 # No hay separación necesaria si la sombra no supera al propio panel
+            
+        # Distancia D2 (entre los puntos más bajos de las filas)
+        d2 = d1 + x_panel
+        
+        return {
+            "d1_distance_m": {
+                "value": round(d1, 2),
+                "unit": "m",
+                "info": "Distancia mínima entre el borde superior de una fila y el borde inferior de la siguiente."
+            },
+            "d2_distance_m": {
+                "value": round(d2, 2),
+                "unit": "m",
+                "info": "Distancia mínima entre los ejes o bordes inferiores de las filas de paneles."
             }
         }

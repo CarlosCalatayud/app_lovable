@@ -812,3 +812,68 @@ def calculate_voltage_drop_endpoint():
         # Capturamos cualquier otro error inesperado
         current_app.logger.error(f"Error inesperado en la calculadora: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
+
+@bp_api.route('/calculator/wire-section', methods=['POST'])
+@token_required
+def calculate_wire_section_endpoint():
+    data = request.json
+    calculator = ElectricalCalculator()
+    try:
+        result = calculator.calculate_wire_section(
+            system_type=data.get('system_type'),
+            voltage=float(data.get('voltage')),
+            power=float(data.get('power')),
+            cos_phi=float(data.get('cos_phi', 1.0)),
+            length=float(data.get('length')),
+            max_voltage_drop_percent=float(data.get('max_voltage_drop_percent')),
+            material=data.get('material')
+        )
+        return jsonify(result), 200
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": f"Datos de entrada inválidos: {e}"}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error en calculate_wire_section: {e}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor."}), 500
+
+@bp_api.route('/calculator/panel-separation', methods=['POST'])
+@token_required
+def calculate_panel_separation_endpoint():
+    data = request.json
+    calculator = ElectricalCalculator()
+    try:
+        result = calculator.calculate_panel_separation(
+            panel_vertical_side_m=float(data.get('panel_vertical_side_m')),
+            panel_inclination_deg=float(data.get('panel_inclination_deg')),
+            latitude_deg=float(data.get('latitude_deg'))
+        )
+        return jsonify(result), 200
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": f"Datos de entrada inválidos: {e}"}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error en calculate_panel_separation: {e}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor."}), 500
+        
+# Endpoints Placeholder para los cálculos complejos
+@bp_api.route('/calculator/current', methods=['POST'])
+@token_required
+def calculate_current_endpoint():
+    data = request.json
+    calculator = ElectricalCalculator()
+    result = calculator.calculate_current(data.get('method'), data.get('params'))
+    return jsonify(result)
+
+@bp_api.route('/calculator/voltage', methods=['POST'])
+@token_required
+def calculate_voltage_endpoint():
+    data = request.json
+    calculator = ElectricalCalculator()
+    result = calculator.calculate_voltage(data.get('method'), data.get('params'))
+    return jsonify(result)
+
+@bp_api.route('/calculator/protections', methods=['POST'])
+@token_required
+def calculate_protections_endpoint():
+    data = request.json
+    calculator = ElectricalCalculator()
+    result = calculator.calculate_protections(data)
+    return jsonify(result)
