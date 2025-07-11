@@ -819,21 +819,32 @@ def calculate_wire_section_endpoint():
     data = request.json
     calculator = ElectricalCalculator()
     try:
+        # --- LÓGICA DE CONVERSIÓN DEFENSIVA ---
+        # Definimos una función de ayuda para convertir a float de forma segura
+        def to_float(value):
+            if value is None or str(value).strip() == "":
+                return 0.0 # O puedes lanzar un error si el campo es obligatorio
+            return float(str(value).replace(',', '.'))
+
+        # Pasamos los datos a la calculadora usando la conversión segura
         result = calculator.calculate_wire_section(
             system_type=data.get('system_type'),
-            voltage=float(data.get('voltage')),
-            power=float(data.get('power')),
-            cos_phi=float(data.get('cos_phi', 1.0)),
-            length=float(data.get('length')),
-            max_voltage_drop_percent=float(data.get('max_voltage_drop_percent')),
+            voltage=to_float(data.get('voltage')),
+            power=to_float(data.get('power')),
+            cos_phi=to_float(data.get('cos_phi', 1.0)),
+            length=to_float(data.get('length')),
+            max_voltage_drop_percent=to_float(data.get('max_voltage_drop_percent')),
             material=data.get('material')
         )
         return jsonify(result), 200
-    except (ValueError, TypeError) as e:
+        
+    except (ValueError, TypeError, KeyError) as e:
+        # Capturamos errores de conversión o si falta una clave
         return jsonify({"error": f"Datos de entrada inválidos: {e}"}), 400
     except Exception as e:
         current_app.logger.error(f"Error en calculate_wire_section: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor."}), 500
+
 
 @bp_api.route('/calculator/panel-separation', methods=['POST'])
 @token_required
