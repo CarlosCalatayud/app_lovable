@@ -4,6 +4,13 @@ import json
 import sqlite3
 import psycopg2
 from psycopg2.extras import RealDictCursor # Para que PostgreSQL devuelva dicts
+import logging ### CTO: Importamos el módulo de logging profesional.
+
+
+### CTO: Configuramos un logger básico. En una app más grande, esto iría en la configuración de Flask.
+### Esto escribirá en la consola de Render con un formato claro [NIVEL]: mensaje
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+
 
 # --- CONFIGURACIÓN Y CONEXIÓN ---
 
@@ -15,25 +22,22 @@ def connect_db():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url:
-        # Modo Producción (Render con PostgreSQL)
         try:
-            # Usamos RealDictCursor para que las filas devueltas se comporten como diccionarios,
-            # similar a conn.row_factory = sqlite3.Row
             conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+            logging.info("Conexión a PostgreSQL establecida con éxito.")
             return conn
         except psycopg2.OperationalError as e:
-            print(f"FATAL: No se pudo conectar a la base de datos PostgreSQL: {e}")
+            logging.critical(f"FATAL: No se pudo conectar a la base de datos PostgreSQL: {e}")
             raise
     else:
-        # Modo Local (Desarrollo con SQLite)
         base_dir = os.path.dirname(os.path.abspath(__file__))
         db_path = os.path.join(base_dir, 'instalaciones_local.db')
         conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row  # Permite acceder a las columnas por nombre
+        conn.row_factory = sqlite3.Row
+        logging.info(f"Conexión a SQLite local establecida con éxito: {db_path}")
         return conn
 
 def is_postgres(conn):
-    """Función de ayuda para saber si la conexión es a PostgreSQL."""
     return hasattr(conn, 'get_backend_pid')
 
 # --- CREACIÓN Y POBLACIÓN DE TABLAS ---
@@ -174,9 +178,11 @@ def create_tables():
                 translated_sql = translate_schema(table_sql, db_type)
                 cursor.execute(translated_sql)
         conn.commit()
-        print("Tablas creadas o ya existentes.")
+        logging.info("Comprobación/Creación de tablas completada.")
+
     except (Exception, psycopg2.Error) as error:
-        print(f"Error al crear tablas: {error}")
+        logging.error(f"Error al crear tablas: {error}")
+
         conn.rollback()
     finally:
         conn.close()
@@ -241,17 +247,19 @@ def _execute_insert(conn, sql, params):
     try:
         cursor = conn.cursor()
         cursor.execute(sql, params)
-        if db_type == 'postgres':
-            new_id = cursor.fetchone()['id']
-        else: # SQLite
-            new_id = cursor.lastrowid
-        # conn.commit()
+        new_id = cursor.fetchone()['id'] if db_type == 'postgres' else cursor.lastrowid
         conn.commit()
+        logging.info(f"INSERT exitoso. Nueva ID: {new_id}. Tabla: {sql.split(' ')[2]}")
         return new_id, "Creado correctamente."
     except (psycopg2.IntegrityError, sqlite3.IntegrityError) as e:
-        return None, f"Error de integridad: El registro ya existe o viola una restricción. ({e})"
+        conn.rollback()
+        ### CTO: Log de error específico para violaciones de integridad (ej. DNI duplicado).
+        logging.warning(f"Error de integridad al ejecutar INSERT. SQL: {cursor.query if db_type == 'postgres' else sql}, PARAMS: {params}. Error: {e}")
+        return None, f"Error de integridad: El registro ya existe o viola una restricción."
     except (Exception, psycopg2.Error, sqlite3.Error) as e:
         conn.rollback()
+        ### CTO: Log de error genérico con toda la información para depurar.
+        logging.error(f"Error de base de datos en INSERT. SQL: {cursor.query if db_type == 'postgres' else sql}, PARAMS: {params}. Error: {e}")
         return None, f"Error de base de datos: {e}"
 
 def _execute_update_delete(conn, sql, params):
@@ -264,16 +272,17 @@ def _execute_update_delete(conn, sql, params):
         cursor = conn.cursor()
         cursor.execute(sql, params)
         rowcount = cursor.rowcount
-        # conn.commit() # <--- HEMOS QUITADO EL COMMIT DE AQUÍ
+        conn.commit() # ### CTO: El commit debe estar aquí para que la operación se complete.
         cursor.close()
         if rowcount == 0:
+            logging.warning(f"Operación UPDATE/DELETE no afectó a ninguna fila. SQL: {cursor.query if db_type == 'postgres' else sql}, PARAMS: {params}")
             return False, "Elemento no encontrado o los datos no cambiaron."
-        return True, "Operación preparada para commit."
-    except (psycopg2.IntegrityError, sqlite3.IntegrityError) as e:
-        conn.rollback()
-        return False, f"Error de integridad: Viola una restricción. ({e})"
+
+        logging.info(f"Operación UPDATE/DELETE exitosa. Filas afectadas: {rowcount}. Tabla: {sql.split(' ')[1]}")
+        return True, "Operación completada con éxito."
     except (Exception, psycopg2.Error, sqlite3.Error) as e:
         conn.rollback()
+        logging.error(f"Error de base de datos en UPDATE/DELETE. SQL: {cursor.query if db_type == 'postgres' else sql}, PARAMS: {params}. Error: {e}")
         return False, f"Error de base de datos: {e}"
 
 def _execute_select(conn, sql, params=None, one=False):
@@ -285,21 +294,12 @@ def _execute_select(conn, sql, params=None, one=False):
     try:
         with conn.cursor() as cursor:
             cursor.execute(sql, params or ())
-            if one:
-                # Esto está bien, devuelve un objeto o None
-                return cursor.fetchone()
-            else:
-                # Esto también está bien, devuelve una lista de objetos
-                return cursor.fetchall()
+            results = cursor.fetchone() if one else cursor.fetchall()
+            return results
     except (Exception, psycopg2.Error, sqlite3.Error) as e:
-        # AQUÍ ESTÁ EL CAMBIO IMPORTANTE
-        # Usamos print() porque el logger de Flask no está disponible aquí
-        print(f"!!! ERROR EN _execute_select !!! SQL: {sql} | PARAMS: {params} | ERROR: {e}")
-        # Si se esperan múltiples resultados, SIEMPRE devolver una lista vacía en caso de error.
-        if one:
-            return None
-        else:
-            return [] # NUNCA DEVOLVER None, SIEMPRE UNA LISTA VACÍA
+        ### CTO: Log de error detallado. Esto es crucial para la depuración en Render.
+        logging.error(f"Error de base de datos en SELECT. SQL: {cursor.query if 'cursor' in locals() and db_type == 'postgres' else sql}, PARAMS: {params}. Error: {e}")
+        return None if one else []
 
 # --- Clientes ---
 def add_cliente(conn, data_dict):
@@ -576,10 +576,40 @@ def update_bateria(conn, bateria_id, data_dict):
     sql = "UPDATE baterias SET nombre_bateria = ?, capacidad_kwh = ? WHERE id = ?"
     return _execute_update_delete(conn, sql, (nombre, capacidad_float, bateria_id))
 
+def get_catalog_data(conn, catalog_name, order_by_column="id", columns="*"):
+    """
+    Obtiene todos los datos de una tabla de CATÁLOGO (pública).
+    Esta función está restringida a tablas que no contienen datos de usuario.
+    """
+    # Lista de validación de tablas de CATÁLOGO permitidas.
+    VALID_CATALOG_TABLES = [
+        "inversores", "paneles_solares", "contadores", "baterias", 
+        "tipos_vias", "distribuidoras", "categorias_instalador", "tipos_finca"
+    ]
+    
+    if catalog_name not in VALID_CATALOG_TABLES:
+        logging.error(f"SEGURIDAD: Intento de acceso a tabla no catalogada '{catalog_name}' con get_catalog_data.")
+        return [] # Devolver lista vacía para prevenir errores en el frontend.
+
+    # Sanitización básica de columnas y ordenación para evitar inyección SQL
+    if not all(c.isalnum() or c == '_' or c == '*' for c in columns.replace(',', ' ').split()):
+        logging.error(f"SEGURIDAD: Intento de inyección SQL en parámetro 'columns': {columns}")
+        return []
+        
+    if not (order_by_column.isalnum() or order_by_column == '_'):
+        logging.error(f"SEGURIDAD: Intento de inyección SQL en parámetro 'order_by_column': {order_by_column}")
+        return []
+
+    sql = f"SELECT {columns} FROM {catalog_name} ORDER BY {order_by_column}"
+    
+    # Usamos nuestra función de ayuda segura que ya maneja errores y logging.
+    return _execute_select(conn, sql)
+
+
 
 # Punto de entrada para ejecutar la configuración inicial desde la línea de comandos
 if __name__ == '__main__':
-    print("Ejecutando configuración de la base de datos...")
+    logging.info("Ejecutando configuración de la base de datos desde línea de comandos...")
     create_tables()
     populate_initial_data()
-    print("Configuración completada.")
+    logging.info("Configuración completada.")
