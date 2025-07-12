@@ -869,17 +869,47 @@ def calculate_panel_separation_endpoint():
 @token_required
 def calculate_current_endpoint():
     data = request.json
+    
+    # --- LOGGING DE DEPURACIÓN ---
+    current_app.logger.info("--- CÁLCULO DE CORRIENTE ---")
+    current_app.logger.info(f"BODY RECIBIDO DE LOVABLE: {json.dumps(data, indent=2)}")
+    # -----------------------------
+
     calculator = ElectricalCalculator()
-    result = calculator.calculate_current(data.get('method'), data.get('params'))
-    return jsonify(result)
+    try:
+        result = calculator.calculate_current(data.get('method'), data.get('params', {}))
+        current_app.logger.info(f"RESULTADO DEL CÁLCULO: {result}")
+        return jsonify(result)
+        
+    except ValueError as e:
+        current_app.logger.error(f"Error de validación en cálculo de corriente: {e}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error inesperado en cálculo de corriente: {e}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
 
 @bp_api.route('/calculator/voltage', methods=['POST'])
 @token_required
 def calculate_voltage_endpoint():
     data = request.json
+
+    # --- LOGGING DE DEPURACIÓN ---
+    current_app.logger.info("--- CÁLCULO DE TENSIÓN ---")
+    current_app.logger.info(f"BODY RECIBIDO DE LOVABLE: {json.dumps(data, indent=2)}")
+    # -----------------------------
+
     calculator = ElectricalCalculator()
-    result = calculator.calculate_voltage(data.get('method'), data.get('params'))
-    return jsonify(result)
+    try:
+        result = calculator.calculate_voltage(data.get('method'), data.get('params', {}))
+        current_app.logger.info(f"RESULTADO DEL CÁLCULO: {result}")
+        return jsonify(result)
+
+    except ValueError as e:
+        current_app.logger.error(f"Error de validación en cálculo de tensión: {e}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error inesperado en cálculo de tensión: {e}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
 
 @bp_api.route('/calculator/protections', methods=['POST'])
 @token_required
@@ -890,16 +920,14 @@ def calculate_protections_endpoint():
     current_app.logger.info("--- CÁLCULO DE PROTECCIONES ---")
     current_app.logger.info(f"BODY RECIBIDO DE LOVABLE: {json.dumps(data, indent=2)}")
     # -----------------------------
-    
+
     calculator = ElectricalCalculator()
     try:
-        # El try/except ahora está dentro del endpoint para capturar errores de la calculadora
         result = calculator.calculate_protections(data)
         current_app.logger.info(f"RESULTADO DEL CÁLCULO: {result}")
         return jsonify(result)
         
     except ValueError as e:
-        # Capturamos los errores de validación de la calculadora y los devolvemos
         current_app.logger.error(f"Error de validación en cálculo de protecciones: {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
