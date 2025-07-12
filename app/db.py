@@ -301,107 +301,125 @@ def _execute_select(conn, sql, params=None, one=False):
         else:
             return [] # NUNCA DEVOLVER None, SIEMPRE UNA LISTA VACÍA
 
-# --- clientes ---
-def add_cliente(conn, app_user_id, nombre, apellidos, dni, direccion):
+# --- Clientes ---
+def add_cliente(conn, data_dict):
+    """Añade un nuevo cliente, asegurando que se asocia al usuario de la app."""
     sql = "INSERT INTO clientes (app_user_id, nombre, apellidos, dni, direccion) VALUES (?, ?, ?, ?, ?)"
-    return _execute_insert(conn, sql, (app_user_id, nombre, apellidos, dni, direccion))
+    # Asumimos que data_dict ya contiene 'app_user_id' inyectado desde la API
+    return _execute_insert(conn, sql, (data_dict['app_user_id'], data_dict.get('nombre'), data_dict.get('apellidos'), data_dict.get('dni'), data_dict.get('direccion')))
 
-# POR ESTO:
-def get_all_clientes(conn, app_user_id): # <-- AÑADIMOS app_user_id
+def get_all_clientes(conn, app_user_id):
+    """Obtiene todos los clientes pertenecientes a un usuario de la app."""
     sql = "SELECT * FROM clientes WHERE app_user_id = ? ORDER BY nombre, apellidos"
     return _execute_select(conn, sql, (app_user_id,))
-def update_cliente(conn, cliente_id, nombre, apellidos, dni, direccion):
-    sql = "UPDATE clientes SET nombre = ?, apellidos = ?, dni = ?, direccion = ? WHERE id = ?"
-    return _execute_update_delete(conn, sql, (nombre, apellidos, dni, direccion, cliente_id))
 
-def delete_cliente(conn, cliente_id):
-    # Primero, comprobar dependencias
-    count = _execute_select(conn, "SELECT COUNT(*) as c FROM instalaciones WHERE  = ?", (cliente_id,), one=True)
-    if count and count['c'] > 0:
-        return False, "El cliente está asignado a una o más instalaciones y no puede ser eliminado."
-    return _execute_update_delete(conn, "DELETE FROM clientes WHERE id = ?", (cliente_id,))
+def get_cliente_by_id(conn, cliente_id, app_user_id):
+    """Obtiene un cliente específico, verificando que pertenece al usuario de la app."""
+    sql = "SELECT * FROM clientes WHERE id = ? AND app_user_id = ?"
+    return _execute_select(conn, sql, (cliente_id, app_user_id), one=True)
 
-def get_cliente_by_id(conn, cliente_id):
-    """Obtiene un único cliente por su ID."""
-    sql = "SELECT * FROM clientes WHERE id = ?"
-    return _execute_select(conn, sql, (cliente_id,), one=True)
+def update_cliente(conn, cliente_id, app_user_id, data_dict):
+    """Actualiza un cliente, verificando que pertenece al usuario de la app."""
+    sql = "UPDATE clientes SET nombre = ?, apellidos = ?, dni = ?, direccion = ? WHERE id = ? AND app_user_id = ?"
+    return _execute_update_delete(conn, sql, (data_dict.get('nombre'), data_dict.get('apellidos'), data_dict.get('dni'), data_dict.get('direccion'), cliente_id, app_user_id))
 
-# ... (Repite el patrón para promotores, instaladores, etc.) ...
-# --- promotores ---
-def add_promotor(conn, app_user_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
+def delete_cliente(conn, cliente_id, app_user_id):
+    """Elimina un cliente, verificando que pertenece al usuario de la app."""
+    # Opcional: añadir una comprobación de si el cliente está en uso en alguna instalación
+    sql = "DELETE FROM clientes WHERE id = ? AND app_user_id = ?"
+    return _execute_update_delete(conn, sql, (cliente_id, app_user_id))
+
+
+# --- Promotores ---
+
+def add_promotor(conn, data_dict):
+    """Añade un nuevo promotor."""
     sql = "INSERT INTO promotores (app_user_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif) VALUES (?, ?, ?, ?, ?)"
-    return _execute_insert(conn, sql, (app_user_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif))
-def get_promotor_by_id(conn, promotor_id):
-    """Obtiene un único promotor por su ID."""
-    sql = "SELECT * FROM promotores WHERE id = ?"
-    return _execute_select(conn, sql, (promotor_id,), one=True)
-def get_all_promotores(conn, app_user_id): # <-- AÑADIMOS app_user_id
+    return _execute_insert(conn, sql, (data_dict['app_user_id'], data_dict.get('nombre_razon_social'), data_dict.get('apellidos'), data_dict.get('direccion_fiscal'), data_dict.get('dni_cif')))
+
+def get_all_promotores(conn, app_user_id):
+    """Obtiene todos los promotores de un usuario."""
     sql = "SELECT * FROM promotores WHERE app_user_id = ? ORDER BY nombre_razon_social"
     return _execute_select(conn, sql, (app_user_id,))
-def update_promotor(conn, promotor_id, nombre_razon_social, apellidos, direccion_fiscal, dni_cif):
-    sql = "UPDATE promotores SET nombre_razon_social = ?, apellidos = ?, direccion_fiscal = ?, dni_cif = ? WHERE id = ?"
-    return _execute_update_delete(conn, sql, (nombre_razon_social, apellidos, direccion_fiscal, dni_cif, promotor_id))
-def delete_promotor(conn, promotor_id):
-    # Primero, comprobar dependencias
-    count = _execute_select(conn, "SELECT COUNT(*) as c FROM instalaciones WHERE promotor_id = ?", (promotor_id,), one=True)
-    if count and count['c'] > 0:
-        return False, "El promotor está asignado a una o más instalaciones y no puede ser eliminado."
-    return _execute_update_delete(conn, "DELETE FROM promotores WHERE id = ?", (promotor_id,))
 
-# --- instaladores ---
-def add_instalador(conn, app_user_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico):
+def get_promotor_by_id(conn, promotor_id, app_user_id):
+    """Obtiene un promotor específico de un usuario."""
+    sql = "SELECT * FROM promotores WHERE id = ? AND app_user_id = ?"
+    return _execute_select(conn, sql, (promotor_id, app_user_id), one=True)
+
+def update_promotor(conn, promotor_id, app_user_id, data_dict):
+    """Actualiza un promotor de un usuario."""
+    sql = "UPDATE promotores SET nombre_razon_social = ?, apellidos = ?, direccion_fiscal = ?, dni_cif = ? WHERE id = ? AND app_user_id = ?"
+    return _execute_update_delete(conn, sql, (data_dict.get('nombre_razon_social'), data_dict.get('apellidos'), data_dict.get('direccion_fiscal'), data_dict.get('dni_cif'), promotor_id, app_user_id))
+
+def delete_promotor(conn, promotor_id, app_user_id):
+    """Elimina un promotor de un usuario."""
+    sql = "DELETE FROM promotores WHERE id = ? AND app_user_id = ?"
+    return _execute_update_delete(conn, sql, (promotor_id, app_user_id))
+
+
+# --- Instaladores ---
+
+def add_instalador(conn, data_dict):
+    """Añade un nuevo instalador."""
     sql = "INSERT INTO instaladores (app_user_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico) VALUES (?, ?, ?, ?, ?, ?)"
-    return _execute_insert(conn, sql, (app_user_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico))
-def get_all_instaladores(conn, app_user_id): # <-- AÑADIMOS app_user_id
+    return _execute_insert(conn, sql, (data_dict['app_user_id'], data_dict.get('nombre_empresa'), data_dict.get('direccion_empresa'), data_dict.get('cif_empresa'), data_dict.get('nombre_tecnico'), data_dict.get('competencia_tecnico')))
+
+def get_all_instaladores(conn, app_user_id):
+    """Obtiene todos los instaladores de un usuario."""
     sql = "SELECT * FROM instaladores WHERE app_user_id = ? ORDER BY nombre_empresa"
     return _execute_select(conn, sql, (app_user_id,))
-def update_instalador(conn, instalador_id, nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico):
-    sql = "UPDATE instaladores SET nombre_empresa = ?, direccion_empresa = ?, cif_empresa = ?, nombre_tecnico = ?, competencia_tecnico = ? WHERE id = ?"
-    return _execute_update_delete(conn, sql, (nombre_empresa, direccion_empresa, cif_empresa, nombre_tecnico, competencia_tecnico, instalador_id))
-def delete_instalador(conn, instalador_id):
-    # Primero, comprobar dependencias
-    count = _execute_select(conn, "SELECT COUNT(*) as c FROM instalaciones WHERE instalador_id = ?", (instalador_id,), one=True)
-    if count and count['c'] > 0:
-        return False, "El instalador está asignado a una o más instalaciones y no puede ser eliminado."
-    return _execute_update_delete(conn, "DELETE FROM instaladores WHERE id = ?", (instalador_id,))
-def get_instalador_by_id(conn, instalador_id):
-    """Obtiene un único instalador por su ID."""
-    sql = "SELECT * FROM instaladores WHERE id = ?"
-    return _execute_select(conn, sql, (instalador_id,), one=True)
 
-# --- instalaciones ---
+def get_instalador_by_id(conn, instalador_id, app_user_id):
+    """Obtiene un instalador específico de un usuario."""
+    sql = "SELECT * FROM instaladores WHERE id = ? AND app_user_id = ?"
+    return _execute_select(conn, sql, (instalador_id, app_user_id), one=True)
+
+def update_instalador(conn, instalador_id, app_user_id, data_dict):
+    """Actualiza un instalador de un usuario."""
+    sql = "UPDATE instaladores SET nombre_empresa = ?, direccion_empresa = ?, cif_empresa = ?, nombre_tecnico = ?, competencia_tecnico = ? WHERE id = ? AND app_user_id = ?"
+    return _execute_update_delete(conn, sql, (data_dict.get('nombre_empresa'), data_dict.get('direccion_empresa'), data_dict.get('cif_empresa'), data_dict.get('nombre_tecnico'), data_dict.get('competencia_tecnico'), instalador_id, app_user_id))
+
+def delete_instalador(conn, instalador_id, app_user_id):
+    """Elimina un instalador de un usuario."""
+    sql = "DELETE FROM instaladores WHERE id = ? AND app_user_id = ?"
+    return _execute_update_delete(conn, sql, (instalador_id, app_user_id))
+
+
+# --- Instalaciones ---
+
 def add_instalacion(conn, data_dict):
     """Añade una nueva instalación usando un diccionario de datos."""
-    # Lista de todas las columnas que podemos insertar
     fields = [
-        'app_user_id',
-        'descripcion', 'cliente_id', 'promotor_id', 'instalador_id',
-        'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
-        'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
-        'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
-        'inversor', 'numero_inversores', 'bateria', 'numero_baterias',
-        'distribuidora', 'cups', 'potencia_contratada_w',
-        # Nuevos campos
-        'tipo_de_estructura', 'tipo_de_cubierta', 'material_cableado',
-        'longitud_cable_cc_string1', 'seccion_cable_ac_mm2', 'longitud_cable_ac_m',
-        'protector_sobretensiones', 'diferencial_a', 'sensibilidad_ma'
+        'app_user_id', 'descripcion', 'cliente_id', 'promotor_id', 'instalador_id',
+        'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via', 'piso_puerta',
+        'codigo_postal', 'localidad', 'provincia', 'referencia_catastral', 'tipo_finca',
+        'panel_solar', 'numero_paneles', 'inversor', 'numero_inversores', 'bateria',
+        'numero_baterias', 'distribuidora', 'cups', 'potencia_contratada_w',
+        'tipo_de_estructura', 'tipo_de_cubierta', 'material_cableado', 'longitud_cable_cc_string1',
+        'seccion_cable_ac_mm2', 'longitud_cable_ac_m', 'protector_sobretensiones',
+        'diferencial_a', 'sensibilidad_ma'
     ]
-
-    
-    # Filtramos solo los campos que vienen en data_dict para construir la query
     columns_to_insert = [f for f in fields if f in data_dict]
+    if 'app_user_id' not in columns_to_insert:
+        return None, "Error crítico: Falta el app_user_id para crear la instalación."
     values_to_insert = [data_dict[f] for f in columns_to_insert]
-    
     placeholders = ', '.join(['?'] * len(columns_to_insert))
     sql = f"INSERT INTO instalaciones ({', '.join(columns_to_insert)}) VALUES ({placeholders})"
-    
     return _execute_insert(conn, sql, tuple(values_to_insert))
 
-def get_instalacion_completa(conn, instalacion_id, app_user_id): # <-- AÑADIMOS app_user_id
-    """
-    Obtiene todos los datos de una instalación específica,
-    verificando que pertenece al usuario de la app.
-    """
+def get_all_instalaciones(conn, app_user_id, ciudad=None):
+    """Obtiene todas las instalaciones de un usuario, con filtrado opcional por ciudad."""
+    params = [app_user_id]
+    sql = "SELECT id, descripcion, fecha_creacion, provincia, localidad FROM instalaciones WHERE app_user_id = ?"
+    if ciudad:
+        sql += " AND lower(localidad) LIKE ?"
+        params.append(f"%{ciudad.lower()}%")
+    sql += " ORDER BY fecha_creacion DESC"
+    return _execute_select(conn, sql, tuple(params))
+
+def get_instalacion_completa(conn, instalacion_id, app_user_id):
+    """Obtiene todos los datos de una instalación específica, verificando que pertenece al usuario."""
     sql = """
     SELECT
         I.*,
@@ -412,61 +430,36 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id): # <-- AÑADIMOS
     LEFT JOIN clientes U ON I.cliente_id = U.id
     LEFT JOIN promotores P ON I.promotor_id = P.id
     LEFT JOIN instaladores INS ON I.instalador_id = INS.id
-    WHERE I.id = ? AND I.app_user_id = ? 
-    """ # <-- AÑADIMOS la condición de seguridad
+    WHERE I.id = ? AND I.app_user_id = ?
+    """
     return _execute_select(conn, sql, (instalacion_id, app_user_id), one=True)
 
-def update_instalacion(conn, instalacion_id, app_user_id, data_dict): # <-- AÑADIMOS app_user_id
-    """Actualiza una instalación, verificando que pertenece al usuario de la app."""
+def update_instalacion(conn, instalacion_id, app_user_id, data_dict):
+    """Actualiza una instalación, verificando que pertenece al usuario."""
     fields = [
         'descripcion', 'cliente_id', 'promotor_id', 'instalador_id',
-        'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via',
-        'piso_puerta', 'codigo_postal', 'localidad', 'provincia',
-        'referencia_catastral', 'tipo_finca', 'panel_solar', 'numero_paneles',
-        'inversor', 'numero_inversores', 'bateria', 'numero_baterias',
-        'distribuidora', 'cups', 'potencia_contratada_w',
-        'tipo_de_estructura', 'tipo_de_cubierta', 'material_cableado',
-        'longitud_cable_cc_string1', 'seccion_cable_ac_mm2', 'longitud_cable_ac_m',
-        'protector_sobretensiones', 'diferencial_a', 'sensibilidad_ma'
+        'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via', 'piso_puerta',
+        'codigo_postal', 'localidad', 'provincia', 'referencia_catastral', 'tipo_finca',
+        'panel_solar', 'numero_paneles', 'inversor', 'numero_inversores', 'bateria',
+        'numero_baterias', 'distribuidora', 'cups', 'potencia_contratada_w',
+        'tipo_de_estructura', 'tipo_de_cubierta', 'material_cableado', 'longitud_cable_cc_string1',
+        'seccion_cable_ac_mm2', 'longitud_cable_ac_m', 'protector_sobretensiones',
+        'diferencial_a', 'sensibilidad_ma'
     ]
-
     fields_to_update = [f for f in fields if f in data_dict]
     if not fields_to_update:
         return False, "No se proporcionaron campos para actualizar."
-
     values = [data_dict[f] for f in fields_to_update]
     values.append(instalacion_id)
-    values.append(app_user_id) # <-- AÑADIMOS el app_user_id a la lista de valores
-
+    values.append(app_user_id)
     set_clause = ', '.join([f"{field} = ?" for field in fields_to_update])
-    
-    # La cláusula WHERE ahora comprueba tanto el ID de la instalación como el del propietario
     sql = f"UPDATE instalaciones SET {set_clause} WHERE id = ? AND app_user_id = ?"
-
     return _execute_update_delete(conn, sql, tuple(values))
 
 def delete_instalacion(conn, instalacion_id, app_user_id):
-    """Elimina una instalación, verificando que pertenece al usuario de la app."""
+    """Elimina una instalación, verificando que pertenece al usuario."""
     sql = "DELETE FROM instalaciones WHERE id = ? AND app_user_id = ?"
     return _execute_update_delete(conn, sql, (instalacion_id, app_user_id))
-
-
-def get_all_instalaciones(conn, app_user_id, ciudad=None):
-    """
-    Obtiene todas las instalaciones de un usuario, con filtrado opcional por ciudad.
-    """
-    params = [app_user_id]
-    sql = "SELECT id, descripcion, fecha_creacion, provincia, localidad FROM instalaciones WHERE app_user_id = ?"
-    
-    if ciudad:
-        # Usamos LIKE para búsquedas parciales (ej: 'mad' encuentra 'Madrid')
-        # y lower() para que no distinga mayúsculas/minúsculas.
-        sql += " AND lower(localidad) LIKE ?"
-        params.append(f"%{ciudad.lower()}%")
-        
-    sql += " ORDER BY fecha_creacion DESC"
-    
-    return _execute_select(conn, sql, tuple(params))
 
 def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
     # Lista de validación para seguridad

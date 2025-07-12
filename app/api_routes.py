@@ -23,14 +23,10 @@ def get_db_connection():
 
 @token_required
 def get_instalaciones():
-    # Obtenemos el parámetro 'ciudad' de la URL, ej: /api/instalaciones?ciudad=Madrid
     ciudad_filtro = request.args.get('ciudad', None)
-    
     conn = get_db_connection()
-    # Pasamos el filtro de ciudad a la función de la base de datos
     instalaciones = database.get_all_instalaciones(conn, g.user_id, ciudad=ciudad_filtro)
     conn.close()
-    
     return jsonify(instalaciones)
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['GET'])
@@ -40,9 +36,9 @@ def get_instalacion_detalle(instalacion_id):
     conn = get_db_connection()
     instalacion = database.get_instalacion_completa(conn, instalacion_id, g.user_id)
     conn.close()
-    if instalacion:
-        return jsonify(instalacion)
-    return jsonify({'error': 'Instalación no encontrada o no pertenece a este usuario'}), 404
+    if not instalacion:
+        return jsonify({'error': 'Instalación no encontrada o no pertenece a este usuario'}), 404
+    return jsonify(instalacion)
 
 
 @bp_api.route('/instalaciones', methods=['POST'])
@@ -294,8 +290,7 @@ def generate_selected_docs_api(instalacion_id):
 @token_required # ¡Aplica el decorador!
 def create_cliente_api():
     data = request.json
-    # TEMPORAL: Asignamos el ID de usuario fijo
-    data['app_user_id'] = "7978ca1c-503d-4550-8d04-3aa01d9113ba" 
+    data['app_user_id'] = g.user_id
     if not data or not data.get('nombre') or not data.get('dni'):
         return jsonify({'error': 'Faltan campos obligatorios: nombre y dni'}), 400
 
