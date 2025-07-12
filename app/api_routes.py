@@ -4,7 +4,7 @@ import json
 from . import db as database
 from . import calc as calculations
 from .generation import doc_generator
-from .auth import token_required
+from .auth import token_required, db_connection_managed
 from .calculator import ElectricalCalculator
 import os
 import io
@@ -238,16 +238,21 @@ def delete_instalador_api(conn, instalador_id):
 
 # --- Endpoints para Catálogos (públicos) ---
 
+# ENDPOINT PÚBLICO UNIFICADO PARA TODOS LOS CATÁLOGOS
 @bp_api.route('/catalogos/<string:catalog_name>', methods=['GET'])
-@token_required
-def get_catalog_data(conn, catalog_name):
-    ### CTO: Usamos la función segura que creamos en db.py
-    items = database.get_catalog_data(conn, catalog_name)
-    # La función get_catalog_data ya previene el acceso a tablas no permitidas.
-    if items is None:
-        return jsonify({'error': f'Catálogo no válido o error interno: {catalog_name}'}), 404
-        
-    current_app.logger.info(f"Obtenidos {len(items)} items para el catálogo '{catalog_name}'.")
+@db_connection_managed  # CTO: Usamos el nuevo decorador para rutas públicas.
+def get_catalog_data(conn, catalog_name): # Acepta 'conn'
+    if catalog_name not in CATALOG_TABLE_MAP:
+        return jsonify({'error': f'Catálogo no válido: {catalog_name}'}), 404
+
+    config = CATALOG_TABLE_MAP[catalog_name]
+    table_name = config.get("table")
+    order_by = config.get("order_by", "id")
+
+    # Usamos la función segura que ya teníamos en db.py
+    items = database.get_catalog_data(conn, table_name, order_by_column=order_by)
+    
+    current_app.logger.info(f"Obtenidos {len(items)} items para el catálogo público '{catalog_name}'.")
     return jsonify(items)
 
 
@@ -358,19 +363,19 @@ def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión
 
 
 
-# --- MAPAS DE CONFIGURACIÓN PARA PRODUCTOS Y CATÁLOGOS ---
-# DESPUÉS - CORRECTO
-PRODUCT_TABLE_MAP = {
-    "inversores": {"table": "inversores", "order_by": "nombre_inversor", "add_func": database.add_inversor, "update_func": database.update_inversor},
-    "paneles": {"table": "paneles_solares", "order_by": "nombre_panel", "add_func": database.add_panel_solar, "update_func": database.update_panel_solar},
-    "contadores": {"table": "contadores", "order_by": "nombre_contador", "add_func": database.add_contador, "update_func": database.update_contador},
-    "baterias": {"table": "baterias", "order_by": "nombre_bateria", "add_func": database.add_bateria, "update_func": database.update_bateria},
-}
-
+# MAPA DE CATÁLOGOS UNIFICADO
+# CTO: Unificamos "productos" y "catálogos" en un solo lugar. Es más simple y robusto.
 CATALOG_TABLE_MAP = {
+    # Catálogos de productos
+    "inversores": {"table": "inversores", "order_by": "nombre_inversor"},
+    "paneles": {"table": "paneles_solares", "order_by": "nombre_panel"},
+    "contadores": {"table": "contadores", "order_by": "nombre_contador"},
+    "baterias": {"table": "baterias", "order_by": "nombre_bateria"},
+    # Catálogos generales
     "tipos_vias": {"table": "tipos_vias", "order_by": "nombre_tipo_via"},
     "distribuidoras": {"table": "distribuidoras", "order_by": "nombre_distribuidora"},
-    "categorias_instalador": {"table": "categorias_instalador", "order_by": "nombre_categoria"}
+    "categorias_instalador": {"table": "categorias_instalador", "order_by": "nombre_categoria"},
+    "tipos_finca": {"table": "tipos_finca", "order_by": "nombre_tipo_finca"}
 }
 
 
@@ -388,43 +393,27 @@ def get_current_user():
 
 
 # --- NUEVO ENDPOINT PARA LA CALCULADORA ELÉCTRICA ---
-@bp_api.route('/calculator/voltage-drop', methods=['POST'])
-@token_required # Protegemos el endpoint, ya que es una funcionalidad de la app
-def calculate_voltage_drop_endpoint():
-    """
-    Endpoint para calcular la caída de tensión.
-    Recibe un JSON con todos los parámetros y lo pasa a la calculadora.
-    """
-    data = request.json
-    if not data:
-        return jsonify({"error": "No se recibieron datos en la petición."}), 400
+# CTO: CORRECCIÓN DE `TypeError`
+# Todas las funciones de los endpoints de la calculadora ahora aceptan el argumento `conn`,
+# aunque no lo usen, porque el decorador @token_required se lo pasa.
 
-    # Creamos una instancia de nuestra calculadora
+@bp_api.route('/calculator/voltage-drop', methods=['POST'])
+@token_required
+def calculate_voltage_drop_endpoint(conn): # Acepta 'conn'
+    data = request.json
     calculator = ElectricalCalculator()
-    
     try:
-        # Llamamos a la función de cálculo pasando los parámetros requeridos
-        result = calculator.calculate_voltage_drop(
-            current=data.get('current'),
-            length=data.get('length'),
-            wire_cross_section=data.get('wire_cross_section'),
-            material=data.get('material'),
-            system_type=data.get('system_type'),
-            source_voltage=data.get('source_voltage'),
-            power_factor=data.get('power_factor', 1.0) # Usamos el default si no viene
-        )
+        result = calculator.calculate_voltage_drop(**data) # Pasamos los datos desempaquetados
         return jsonify(result), 200
     except ValueError as e:
-        # Capturamos los errores de validación y los devolvemos como un 400
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        # Capturamos cualquier otro error inesperado
-        current_app.logger.error(f"Error inesperado en la calculadora: {e}", exc_info=True)
+        current_app.logger.error(f"Error en la calculadora de caída de tensión: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
 
 @bp_api.route('/calculator/wire-section', methods=['POST'])
 @token_required
-def calculate_wire_section_endpoint():
+def calculate_wire_section_endpoint(conn): # Acepta 'conn'
     data = request.json
     calculator = ElectricalCalculator()
     try:
@@ -436,19 +425,9 @@ def calculate_wire_section_endpoint():
             return float(str(value).replace(',', '.'))
 
         # Pasamos los datos a la calculadora usando la conversión segura
-        result = calculator.calculate_wire_section(
-            system_type=data.get('system_type'),
-            voltage=to_float(data.get('voltage')),
-            power=to_float(data.get('power')),
-            cos_phi=to_float(data.get('cos_phi', 1.0)),
-            length=to_float(data.get('length')),
-            max_voltage_drop_percent=to_float(data.get('max_voltage_drop_percent')),
-            material=data.get('material')
-        )
+        result = calculator.calculate_wire_section(**data)
         return jsonify(result), 200
-        
     except (ValueError, TypeError, KeyError) as e:
-        # Capturamos errores de conversión o si falta una clave
         return jsonify({"error": f"Datos de entrada inválidos: {e}"}), 400
     except Exception as e:
         current_app.logger.error(f"Error en calculate_wire_section: {e}", exc_info=True)
@@ -457,87 +436,73 @@ def calculate_wire_section_endpoint():
 
 @bp_api.route('/calculator/panel-separation', methods=['POST'])
 @token_required
-def calculate_panel_separation_endpoint():
+def calculate_panel_separation_endpoint(conn): # Acepta 'conn'
     data = request.json
     calculator = ElectricalCalculator()
     try:
-        result = calculator.calculate_panel_separation(
-            panel_vertical_side_m=float(data.get('panel_vertical_side_m')),
-            panel_inclination_deg=float(data.get('panel_inclination_deg')),
-            latitude_deg=float(data.get('latitude_deg'))
-        )
+        result = calculator.calculate_panel_separation(**data)
         return jsonify(result), 200
     except (ValueError, TypeError) as e:
         return jsonify({"error": f"Datos de entrada inválidos: {e}"}), 400
-    except Exception as e:
-        current_app.logger.error(f"Error en calculate_panel_separation: {e}", exc_info=True)
-        return jsonify({"error": "Error interno del servidor."}), 500
         
 # Endpoints Placeholder para los cálculos complejos
 @bp_api.route('/calculator/current', methods=['POST'])
 @token_required
-def calculate_current_endpoint():
+def calculate_current_endpoint(conn): # <-- LA CORRECCIÓN CLAVE
+    """
+    Calcula la corriente eléctrica.
+    Acepta 'conn' para cumplir con el contrato del decorador, aunque no se use en la lógica interna.
+    """
     data = request.json
+    current_app.logger.info(f"Cálculo de corriente solicitado con datos: {data}")
     
-    # --- LOGGING DE DEPURACIÓN ---
-    current_app.logger.info("--- CÁLCULO DE CORRIENTE ---")
-    current_app.logger.info(f"BODY RECIBIDO DE LOVABLE: {json.dumps(data, indent=2)}")
-    # -----------------------------
-
     calculator = ElectricalCalculator()
     try:
         result = calculator.calculate_current(data.get('method'), data.get('params', {}))
-        current_app.logger.info(f"RESULTADO DEL CÁLCULO: {result}")
         return jsonify(result)
-        
     except ValueError as e:
-        current_app.logger.error(f"Error de validación en cálculo de corriente: {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"Error inesperado en cálculo de corriente: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
 
+
 @bp_api.route('/calculator/voltage', methods=['POST'])
 @token_required
-def calculate_voltage_endpoint():
+def calculate_voltage_endpoint(conn): # <-- LA CORRECCIÓN CLAVE
+    """
+    Calcula la tensión eléctrica.
+    Acepta 'conn' para cumplir con el contrato del decorador.
+    """
     data = request.json
-
-    # --- LOGGING DE DEPURACIÓN ---
-    current_app.logger.info("--- CÁLCULO DE TENSIÓN ---")
-    current_app.logger.info(f"BODY RECIBIDO DE LOVABLE: {json.dumps(data, indent=2)}")
-    # -----------------------------
+    current_app.logger.info(f"Cálculo de tensión solicitado con datos: {data}")
 
     calculator = ElectricalCalculator()
     try:
         result = calculator.calculate_voltage(data.get('method'), data.get('params', {}))
-        current_app.logger.info(f"RESULTADO DEL CÁLCULO: {result}")
         return jsonify(result)
-
     except ValueError as e:
-        current_app.logger.error(f"Error de validación en cálculo de tensión: {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"Error inesperado en cálculo de tensión: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
 
+
 @bp_api.route('/calculator/protections', methods=['POST'])
 @token_required
-def calculate_protections_endpoint():
+def calculate_protections_endpoint(conn): # <-- LA CORRECCIÓN CLAVE
+    """
+    Calcula las protecciones eléctricas necesarias.
+    Acepta 'conn' para cumplir con el contrato del decorador.
+    """
     data = request.json
-    
-    # --- LOGGING DE DEPURACIÓN ---
-    current_app.logger.info("--- CÁLCULO DE PROTECCIONES ---")
-    current_app.logger.info(f"BODY RECIBIDO DE LOVABLE: {json.dumps(data, indent=2)}")
-    # -----------------------------
+    current_app.logger.info(f"Cálculo de protecciones solicitado con datos: {data}")
 
     calculator = ElectricalCalculator()
     try:
         result = calculator.calculate_protections(data)
-        current_app.logger.info(f"RESULTADO DEL CÁLCULO: {result}")
         return jsonify(result)
-        
     except ValueError as e:
-        current_app.logger.error(f"Error de validación en cálculo de protecciones: {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         current_app.logger.error(f"Error inesperado en cálculo de protecciones: {e}", exc_info=True)
