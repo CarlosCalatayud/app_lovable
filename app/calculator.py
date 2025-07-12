@@ -333,13 +333,91 @@ class ElectricalCalculator:
     # Por ahora, creamos funciones placeholder que devuelven resultados de ejemplo.
     
     def calculate_current(self, method: str, params: Dict) -> Dict:
-        """Calcula la corriente basado en diferentes métodos. (Placeholder)"""
-        # La implementación real requeriría un switch/case para 'method'
-        return {"calculated_current": {"value": 13.04, "unit": "A", "info": f"Corriente calculada usando {method} (resultado de ejemplo)."}}
+        """Calcula la corriente (I) en Amperios, basado en diferentes métodos."""
+        
+        # Función de ayuda interna para obtener valores numéricos de forma segura
+        def get_param(key, default=0.0):
+            val = params.get(key)
+            if val is None or str(val).strip() == '':
+                return default
+            return float(str(val).replace(',', '.'))
 
+        # Valores comunes que se pueden usar en varias fórmulas
+        P = get_param('power_p') # Potencia Activa (W)
+        U = get_param('voltage_u') # Tensión (V)
+        cos_phi = get_param('cos_phi', 1.0)
+        R = get_param('resistance_r') # Resistencia (Ω)
+        Z = get_param('impedance_z') # Impedancia (Ω)
+        S = get_param('apparent_power_s') # Potencia Aparente (VA)
+        Q = get_param('reactive_power_q') # Potencia Reactiva (VAR)
+        sin_phi = get_param('sin_phi')
+        
+        I = 0.0 # Valor por defecto
+
+        try:
+            if method == "Potencia (P), Tensión L-N (U), cos φ":
+                if U * cos_phi == 0: raise ZeroDivisionError("La tensión o el cos(φ) no pueden ser cero.")
+                I = P / (U * cos_phi)
+            elif method == "Potencia (P) y Resistencia (R)":
+                if R == 0: raise ZeroDivisionError("La resistencia no puede ser cero.")
+                I = math.sqrt(P / R)
+            elif method == "Tensión L-N (U) y Impedancia (Z)":
+                if Z == 0: raise ZeroDivisionError("La impedancia no puede ser cero.")
+                I = U / Z
+            elif method == "Potencia Aparente (S) y Tensión L-N (U)":
+                if U == 0: raise ZeroDivisionError("La tensión no puede ser cero.")
+                I = S / U
+            elif method == "Potencia Reactiva (Q), Tensión L-N (U), sen φ":
+                if U * sin_phi == 0: raise ZeroDivisionError("La tensión o el sen(φ) no pueden ser cero.")
+                I = Q / (U * sin_phi)
+            else:
+                raise ValueError(f"Método de cálculo de corriente no reconocido: {method}")
+
+            return {
+                "calculated_current": {
+                    "value": round(I, 2),
+                    "unit": "A",
+                    "info": f"Corriente calculada según Ley de Ohm/Potencia para el método seleccionado."
+                }
+            }
+        except (ValueError, ZeroDivisionError) as e:
+            raise ValueError(f"Error en el cálculo de corriente: {e}")
+
+    # --- REEMPLAZO DE LA FUNCIÓN calculate_voltage ---
     def calculate_voltage(self, method: str, params: Dict) -> Dict:
-        """Calcula la tensión basado en diferentes métodos. (Placeholder)"""
-        return {"calculated_voltage": {"value": 230.0, "unit": "V", "info": f"Tensión calculada usando {method} (resultado de ejemplo)."}}
+        """Calcula la tensión (U) en Voltios, basado en diferentes métodos."""
+        
+        def get_param(key, default=0.0):
+            val = params.get(key)
+            if val is None or str(val).strip() == '':
+                return default
+            return float(str(val).replace(',', '.'))
+
+        P = get_param('power_p')
+        I = get_param('current_i')
+        cos_phi = get_param('cos_phi', 1.0)
+        Z = get_param('impedance_z')
+        
+        U = 0.0 # Valor por defecto
+
+        try:
+            if method == "Potencia (P), Corriente (I), cos φ":
+                if I * cos_phi == 0: raise ZeroDivisionError("La corriente o el cos(φ) no pueden ser cero.")
+                U = P / (I * cos_phi)
+            elif method == "Corriente (I) y Impedancia (Z)":
+                U = I * Z
+            else:
+                raise ValueError(f"Método de cálculo de tensión no reconocido: {method}")
+
+            return {
+                "calculated_voltage": {
+                    "value": round(U, 2),
+                    "unit": "V",
+                    "info": f"Tensión calculada según Ley de Ohm/Potencia para el método seleccionado."
+                }
+            }
+        except (ValueError, ZeroDivisionError) as e:
+            raise ValueError(f"Error en el cálculo de tensión: {e}")
 
     def calculate_protections(self, params: Dict) -> Dict:
         """

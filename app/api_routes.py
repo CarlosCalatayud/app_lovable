@@ -885,6 +885,23 @@ def calculate_voltage_endpoint():
 @token_required
 def calculate_protections_endpoint():
     data = request.json
+    
+    # --- LOGGING DE DEPURACIÓN ---
+    current_app.logger.info("--- CÁLCULO DE PROTECCIONES ---")
+    current_app.logger.info(f"BODY RECIBIDO DE LOVABLE: {json.dumps(data, indent=2)}")
+    # -----------------------------
+    
     calculator = ElectricalCalculator()
-    result = calculator.calculate_protections(data)
-    return jsonify(result)
+    try:
+        # El try/except ahora está dentro del endpoint para capturar errores de la calculadora
+        result = calculator.calculate_protections(data)
+        current_app.logger.info(f"RESULTADO DEL CÁLCULO: {result}")
+        return jsonify(result)
+        
+    except ValueError as e:
+        # Capturamos los errores de validación de la calculadora y los devolvemos
+        current_app.logger.error(f"Error de validación en cálculo de protecciones: {e}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error inesperado en cálculo de protecciones: {e}", exc_info=True)
+        return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
