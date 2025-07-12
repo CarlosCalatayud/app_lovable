@@ -39,12 +39,15 @@ def create_instalacion(conn):
         return jsonify({'error': 'Falta la descripción del proyecto'}), 400
     
     data['app_user_id'] = g.user_id
+        # CTO: Limpiamos los datos antes de enviarlos a la BD
+    sanitized_data = _sanitize_instalacion_data(data)
     
     try:
-        new_id, message = database.add_instalacion(conn, data)
+        new_id, message = database.add_instalacion(conn, sanitized_data)
         if new_id is not None:
             return jsonify({'id': new_id, 'message': message}), 201
         else:
+            # El error ahora será más específico gracias a nuestro db.py
             return jsonify({'error': message}), 400
     except Exception as e:
         current_app.logger.error(f"Excepción en create_instalacion: {e}", exc_info=True)
@@ -54,8 +57,11 @@ def create_instalacion(conn):
 @token_required
 def update_instalacion_endpoint(conn, instalacion_id):
     data = request.json
+        # CTO: Limpiamos los datos también en la actualización
+    sanitized_data = _sanitize_instalacion_data(data)
+
     try:
-        success, message = database.update_instalacion(conn, instalacion_id, g.user_id, data)
+        success, message = database.update_instalacion(conn, instalacion_id, g.user_id, sanitized_data)
         if success:
             return jsonify({'message': 'Proyecto actualizado'}), 200
         else:
@@ -63,6 +69,7 @@ def update_instalacion_endpoint(conn, instalacion_id):
     except Exception as e:
         current_app.logger.error(f"Excepción en update_instalacion: {e}", exc_info=True)
         return jsonify({'error': 'Error interno del servidor'}), 500
+
 
 @bp_api.route('/instalaciones/<int:instalacion_id>', methods=['DELETE'])
 @token_required
@@ -507,3 +514,20 @@ def calculate_protections_endpoint(conn): # <-- LA CORRECCIÓN CLAVE
     except Exception as e:
         current_app.logger.error(f"Error inesperado en cálculo de protecciones: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
+
+
+def _sanitize_instalacion_data(data: dict) -> dict:
+    """Función de ayuda para limpiar los datos numéricos de una instalación."""
+    numeric_fields = [
+        'numero_paneles', 'numero_inversores', 'numero_baterias', 
+        'potencia_contratada_w', 'longitud_cable_cc_string1', 
+        'seccion_cable_ac_mm2', 'longitud_cable_ac_m', 'diferencial_a', 
+        'sensibilidad_ma'
+    ]
+    
+    sanitized_data = data.copy()
+    for field in numeric_fields:
+        if field in sanitized_data and sanitized_data[field] == '':
+            sanitized_data[field] = None # Convierte string vacío a None (SQL NULL)
+    
+    return sanitized_data
