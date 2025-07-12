@@ -192,90 +192,43 @@ class ElectricalCalculator:
         else:
             raise ValueError(f"Unidad de tensión no válida: {voltage['unit']}")
 
-    def calculate_voltage_drop(
-        self,
-        current: Dict[str, Union[float, str]],
-        length: Dict[str, Union[float, str]],
-        wire_cross_section: Dict[str, Union[float, str]],
-        material: Literal['cobre', 'aluminio'],
-        system_type: Literal['monofasico', 'trifasico'],
-        source_voltage: Dict[str, Union[float, str]],
-        power_factor: float = 1.0
-    ) -> Dict[str, Dict[str, Union[float, str]]]:
-        """
-        Calcula la caída de tensión en un conductor.
-
-        Args:
-            current: Corriente que fluye por el conductor.
-            length: Longitud unidireccional del conductor.
-            wire_cross_section: Sección transversal del cable.
-            material: Material del conductor ('cobre' o 'aluminio').
-            system_type: Tipo de sistema ('monofasico' o 'trifasico').
-            source_voltage: Tensión en la fuente.
-            power_factor: Factor de potencia (cos φ), por defecto 1.0.
-
-        Returns:
-            Un diccionario con la caída de tensión en voltios y porcentaje,
-            y la tensión final en la carga.
+    def calculate_voltage(self, method: str, params: Dict) -> Dict:
+        """Calcula la tensión (U) en Voltios, basado en diferentes métodos."""
         
-        Raises:
-            ValueError: Si falta un parámetro obligatorio o un valor es inválido.
-        """
-        # --- 1. Validación y Normalización ---
-        if not all([current, length, wire_cross_section, material, system_type, source_voltage]):
-            raise ValueError("Faltan parámetros obligatorios.")
+        def get_param(key, default=0.0):
+            val = params.get(key)
+            if val is None or str(val).strip() == '':
+                return default
+            return float(str(val).replace(',', '.'))
 
-        I = self._normalize_current(current)
-        L = self._normalize_length(length)
-        S = self._normalize_cross_section(wire_cross_section)
-        V_source = self._normalize_voltage(source_voltage)
+        # CTO: Extraemos los parámetros que esta función sí utiliza.
+        P = get_param('power_p')
+        I = get_param('current_i')
+        cos_phi = get_param('cos_phi', 1.0)
+        Z = get_param('impedance_z')
         
-        if S == 0:
-            raise ValueError("La sección del cable no puede ser cero.")
+        U = 0.0
 
-        if material.lower() == 'cobre':
-            rho = self.RESISTIVIDAD_COBRE
-        elif material.lower() == 'aluminio':
-            rho = self.RESISTIVIDAD_ALUMINIO
-        else:
-            raise ValueError(f"Material no válido: {material}")
+        try:
+            # CTO: Estos son los únicos dos métodos válidos para esta función.
+            if method == "Potencia (P), Corriente (I), cos φ":
+                if I * cos_phi == 0: raise ZeroDivisionError("La corriente o el cos(φ) no pueden ser cero.")
+                U = P / (I * cos_phi)
+            elif method == "Corriente (I) y Impedancia (Z)":
+                U = I * Z
+            else:
+                # Si el frontend envía cualquier otra cosa, falla de forma controlada.
+                raise ValueError(f"Método de cálculo de tensión no reconocido: '{method}'")
 
-        # --- 2. Cálculo ---
-        voltage_drop_v = 0.0
-        if system_type.lower() == 'monofasico':
-            voltage_drop_v = (2 * L * rho * I) / S
-        elif system_type.lower() == 'trifasico':
-            import math # Importamos math solo si es necesario
-            voltage_drop_v = (math.sqrt(3) * L * rho * I * power_factor) / S
-        else:
-            raise ValueError(f"Tipo de sistema no válido: {system_type}")
-        
-        # --- 3. Resultados Adicionales ---
-        voltage_at_load_v = V_source - voltage_drop_v
-        
-        if V_source == 0:
-            voltage_drop_pct = float('inf') # Evitar división por cero
-        else:
-            voltage_drop_pct = (voltage_drop_v / V_source) * 100
-        
-        # --- 4. Formateo de Salida ---
-        return {
-            "voltage_drop_volts": {
-                "value": round(voltage_drop_v, 2),
-                "unit": "V",
-                "info": "Tensión total perdida a lo largo del conductor."
-            },
-            "voltage_drop_percent": {
-                "value": round(voltage_drop_pct, 2),
-                "unit": "%",
-                "info": "Porcentaje de la tensión de origen que se pierde en el cable."
-            },
-            "voltage_at_load": {
-                "value": round(voltage_at_load_v, 2),
-                "unit": "V",
-                "info": "Tensión efectiva que llega a la carga al final del conductor."
+            return {
+                "calculated_voltage": {
+                    "value": round(U, 2),
+                    "unit": "V",
+                    "info": f"Tensión calculada según el método seleccionado."
+                }
             }
-        }
+        except (ValueError, ZeroDivisionError) as e:
+            raise ValueError(f"Error en el cálculo de tensión: {e}")
     
         # --- CÁLCULO 2: SECCIÓN DE CABLE (NUEVO) ---
     def calculate_wire_section(
@@ -424,7 +377,6 @@ class ElectricalCalculator:
         Calcula las protecciones eléctricas adecuadas basándose en Iz y factores de corrección.
         """
         try:
-            # 1. Obtener datos de entrada con validación
             ib = float(params.get('corriente_empleo_ib'))
             seccion = float(params.get('seccion_fase_cable'))
             material = params.get('conductor')
@@ -434,16 +386,16 @@ class ElectricalCalculator:
             num_circuitos_agrupados = int(params.get('circuitos_agrupados', 1))
             num_conductores_cargados = int(params.get('conductores_cargados', 2))
 
+            ### CTO: AÑADIDA VALIDACIÓN DE ENTRADA CRÍTICA ###
+            if num_circuitos_agrupados < 1:
+                raise ValueError("El número de circuitos agrupados debe ser 1 o mayor.")
+
             # 2. Obtener factores de corrección (Kt y Ka)
             # Búsqueda de Kt (Temperatura)
             kt_map = self.KT_TABLE_TEMP.get(aislamiento, {})
-            # Buscamos la temperatura más cercana por debajo
             temp_a_usar = max([t for t in kt_map.keys() if t <= temp_ambiente], default=None)
-            kt = kt_map.get(temp_a_usar, 1.0) # Default 1.0 si no se encuentra
-
-            # Búsqueda de Ka (Agrupamiento)
-            # Esta tabla es más compleja en la realidad, aquí usamos una simplificada
-            ka = self.KA_TABLE_AGRUPACION.get(num_circuitos_agrupados, 0.50) # Default 0.5 para >9 circuitos
+            kt = kt_map.get(temp_a_usar, 1.0) 
+            ka = self.KA_TABLE_AGRUPACION.get(num_circuitos_agrupados, 0.50)
 
             # 3. Calcular Iz' (Iz corregida)
             iz_tabla = self.get_iz_from_table(seccion, material, metodo_instalacion, aislamiento, num_conductores_cargados)
@@ -454,7 +406,6 @@ class ElectricalCalculator:
             magnetotermico_in = None
             for calibre in calibres_comerciales:
                 if calibre >= ib and calibre <= iz_corregida:
-                    # Criterio adicional I2 <= 1.45 * Iz' (I2 ~ 1.45 * In para curva C)
                     if (calibre * 1.45) <= (iz_corregida * 1.45):
                         magnetotermico_in = calibre
                         break
@@ -465,7 +416,7 @@ class ElectricalCalculator:
                 curva = params.get('curva_magnetotermico', 'C')
                 resultado_magnetotermico = f"{curva}{magnetotermico_in}"
                 
-            # 5. Selección del diferencial (sin cambios)
+            # 5. Selección del diferencial
             tipo_diferencial = params.get('tipo_diferencial', 'A')
             resultado_diferencial = f"Tipo {tipo_diferencial}, 30mA (recomendado)"
 
@@ -480,6 +431,7 @@ class ElectricalCalculator:
     # --- CÁLCULO 6: SEPARACIÓN DE PANELES (NUEVO) ---
     def calculate_panel_separation(
         self,
+        # CTO: Estos son los nombres de parámetros que la función SIEMPRE ha esperado.
         panel_vertical_side_m: float,
         panel_inclination_deg: float,
         latitude_deg: float
@@ -490,53 +442,26 @@ class ElectricalCalculator:
         if panel_vertical_side_m <= 0:
             raise ValueError("El lado vertical del panel debe ser mayor que cero.")
 
-        # Convertir ángulos a radianes para los cálculos trigonométricos
         beta = math.radians(panel_inclination_deg)
         phi = math.radians(latitude_deg)
-        
-        # Ángulo solar en el solsticio de invierno (día más desfavorable)
-        # alpha = 90 - phi - 23.45 (fórmula simplificada)
-        # Fórmula más precisa de la altura solar (h) a mediodía solar
-        # h = arcsin(sin(δ)sin(φ) + cos(δ)cos(φ)cos(HRA))
-        # Para el mediodía HRA=0, para el solsticio de invierno δ=-23.45°
         declinacion_invierno = math.radians(-23.45)
+        
         altura_solar_mediodia_rad = math.asin(
             math.sin(declinacion_invierno) * math.sin(phi) + 
             math.cos(declinacion_invierno) * math.cos(phi)
         )
         
         if altura_solar_mediodia_rad <= 0:
-            return {
-                "d1_distance_m": {"value": float('inf'), "info": "En esta latitud, el sol no se eleva lo suficiente en invierno."},
-                "d2_distance_m": {"value": float('inf'), "info": "Sombra permanente en invierno."}
-            }
+            return { "d1_distance_m": {"value": float('inf')}, "d2_distance_m": {"value": float('inf')} }
 
-        # Altura del panel (h)
         h_panel = panel_vertical_side_m * math.sin(beta)
-        
-        # Distancia horizontal cubierta por el panel (x)
         x_panel = panel_vertical_side_m * math.cos(beta)
-        
-        # Longitud de la sombra (L)
         longitud_sombra = h_panel / math.tan(altura_solar_mediodia_rad)
-        
-        # Distancia D1 (desde el final de una fila al inicio de la siguiente)
         d1 = longitud_sombra - x_panel
-        if d1 < 0: 
-            d1 = 0 # No hay separación necesaria si la sombra no supera al propio panel
-            
-        # Distancia D2 (entre los puntos más bajos de las filas)
+        if d1 < 0: d1 = 0 
         d2 = d1 + x_panel
         
         return {
-            "d1_distance_m": {
-                "value": round(d1, 2),
-                "unit": "m",
-                "info": "Distancia mínima entre el borde superior de una fila y el borde inferior de la siguiente."
-            },
-            "d2_distance_m": {
-                "value": round(d2, 2),
-                "unit": "m",
-                "info": "Distancia mínima entre los ejes o bordes inferiores de las filas de paneles."
-            }
+            "d1_distance_m": { "value": round(d1, 2), "unit": "m" },
+            "d2_distance_m": { "value": round(d2, 2), "unit": "m" }
         }
