@@ -8,9 +8,10 @@ TEXTO_CON_ACUMULACION = "La instalación dispone de sistema de acumulación."
 TEXTO_UN_STRING = "La instalación fotovoltaica está compuesta por un único string."
 RHO_COBRE = 0.0172  # Ohm * mm^2 / m
 
+# La nombramos con un guion bajo para indicar que es una función "privada" de este módulo.
 def _get_input(source_dict, key, default=None, data_type=str):
     """
-    Función de ayuda (movida desde calc.py) para obtener y convertir valores de forma segura.
+    Función de ayuda para obtener y convertir valores de un diccionario de forma segura.
     """
     val = source_dict.get(key)
     if val is None or (isinstance(val, str) and val.strip() == ''):
@@ -62,7 +63,7 @@ def prepare_document_context(context: dict) -> dict:
         calculated_data['densidadDeCarga'] = 0
 
     # --- Textos Descriptivos ---
-    nombre_bateria = get_input(context, 'bateria', default='')
+    nombre_bateria = _get_input(context, 'bateria', default='')
     if nombre_bateria and nombre_bateria.lower() != 'no hay almacenamiento':
         calculated_data['textoBaterias'] = TEXTO_CON_ACUMULACION
     else:
@@ -77,10 +78,10 @@ def prepare_document_context(context: dict) -> dict:
     calculated_data['textoDisposiciónModulos'] = TEXTO_UN_STRING # Valor por defecto
 
     # --- Cálculos de Cableado y Protecciones ---
-    long_cc = get_input(context, 'longitud_cable_cc_string1', default=0, data_type=float)
-    seccion_ca_rec = get_input(context, 'secciones_ca_recomendado_mm2', default=2.5, data_type=float)
-    corriente_max_panel = get_input(context, 'corriente_maxima_funcionamiento_a', default=0, data_type=float)
-    tension_max_panel = get_input(context, 'tension_maximo_funcionamiento_v', default=0, data_type=float)
+    long_cc = _get_input(context, 'longitud_cable_cc_string1', default=0, data_type=float)
+    seccion_ca_rec = _get_input(context, 'secciones_ca_recomendado_mm2', default=2.5, data_type=float)
+    corriente_max_panel = _get_input(context, 'corriente_maxima_funcionamiento_a', default=0, data_type=float)
+    tension_max_panel = _get_input(context, 'tension_maximo_funcionamiento_v', default=0, data_type=float)
 
     if seccion_ca_rec > 0:
         caida_tension_cc = ((2 * long_cc * RHO_COBRE * corriente_max_panel) / seccion_ca_rec)
@@ -91,9 +92,9 @@ def prepare_document_context(context: dict) -> dict:
     else:
         calculated_data['caidaTensionCCString1'] = 0
         
-    long_ac = get_input(context, 'longitud_cable_ac_m', default=0, data_type=float)
-    seccion_ac = get_input(context, 'seccion_cable_ac_mm2', default=0, data_type=float)
-    corriente_max_inversor = get_input(context, 'corriente_maxima_salida_a', default=0, data_type=float)
+    long_ac = _get_input(context, 'longitud_cable_ac_m', default=0, data_type=float)
+    seccion_ac = _get_input(context, 'seccion_cable_ac_mm2', default=0, data_type=float)
+    corriente_max_inversor = _get_input(context, 'corriente_maxima_salida_a', default=0, data_type=float)
     
     if seccion_ac > 0:
         # Asumimos 230V para monofásico. Esto debería ser más inteligente.
@@ -103,7 +104,7 @@ def prepare_document_context(context: dict) -> dict:
         calculated_data['caidaTensionCA'] = 0
 
     # Polos para protecciones
-    tipo_conexion_inversor = get_input(context, 'monofasico_trifasico', default='Monofásico')
+    tipo_conexion_inversor = _get_input(context, 'monofasico_trifasico', default='Monofásico')
     if tipo_conexion_inversor == 'Trifásico':
         calculated_data['polosCA'] = '4'
     else:
