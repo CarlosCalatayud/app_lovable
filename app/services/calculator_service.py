@@ -465,3 +465,21 @@ class ElectricalCalculator:
             "d1_distance_m": { "value": round(d1, 2), "unit": "m" },
             "d2_distance_m": { "value": round(d2, 2), "unit": "m" }
         }
+    
+    def calculate_voltage_drop(self, current: Dict, length: Dict, wire_cross_section: Dict, material: str, system_type: str, source_voltage: Dict, power_factor: float = 1.0) -> Dict:
+        I = self._normalize_current(current)
+        L = self._normalize_length(length)
+        S = self._normalize_cross_section(wire_cross_section)
+        V_source = self._normalize_voltage(source_voltage)
+        if S == 0: raise ValueError("La sección del cable no puede ser cero.")
+        rho = self.RESISTIVIDAD_COBRE if material.lower() == 'cobre' else self.RESISTIVIDAD_ALUMINIO
+        
+        if system_type.lower() == 'monofasico':
+            drop_v = (2 * L * rho * I) / S
+        else:
+            drop_v = (math.sqrt(3) * L * rho * I * power_factor) / S
+            
+        drop_pct = (drop_v / V_source) * 100 if V_source > 0 else float('inf')
+        
+        return { "voltage_drop_volts": {"value": round(drop_v, 2)}, "voltage_drop_percent": {"value": round(drop_pct, 2)} }
+
