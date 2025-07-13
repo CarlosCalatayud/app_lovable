@@ -5,7 +5,7 @@ import sqlite3
 import psycopg2
 from psycopg2.extras import RealDictCursor # Para que PostgreSQL devuelva dicts
 import logging ### CTO: Importamos el módulo de logging profesional.
-
+from flask import current_app
 
 ### CTO: Configuramos un logger básico. En una app más grande, esto iría en la configuración de Flask.
 ### Esto escribirá en la consola de Render con un formato claro [NIVEL]: mensaje
@@ -581,28 +581,29 @@ def get_catalog_data(conn, catalog_name, order_by_column="id", columns="*"):
     Obtiene todos los datos de una tabla de CATÁLOGO (pública).
     Esta función está restringida a tablas que no contienen datos de usuario.
     """
-    # Lista de validación de tablas de CATÁLOGO permitidas.
     VALID_CATALOG_TABLES = [
         "inversores", "paneles_solares", "contadores", "baterias", 
         "tipos_vias", "distribuidoras", "categorias_instalador", "tipos_finca"
     ]
     
     if catalog_name not in VALID_CATALOG_TABLES:
-        logging.error(f"SEGURIDAD: Intento de acceso a tabla no catalogada '{catalog_name}' con get_catalog_data.")
-        return [] # Devolver lista vacía para prevenir errores en el frontend.
+        current_app.logger.error(f"SEGURIDAD: Intento de acceso a tabla no catalogada '{catalog_name}' con get_catalog_data.")
+        return []
 
-    # Sanitización básica de columnas y ordenación para evitar inyección SQL
-    if not all(c.isalnum() or c == '_' or c == '*' for c in columns.replace(',', ' ').split()):
-        logging.error(f"SEGURIDAD: Intento de inyección SQL en parámetro 'columns': {columns}")
+    # ### CTO: CORRECCIÓN DE LA SANITIZACIÓN ###
+    # Esta nueva comprobación permite nombres de columna con letras, números y guiones bajos.
+    # Es segura y no permitirá caracteres maliciosos como ';', '--', etc.
+    if not all(c.isalnum() or c == '_' for c in order_by_column):
+        current_app.logger.error(f"SEGURIDAD: Caracteres no válidos en el parámetro 'order_by_column': {order_by_column}")
         return []
         
-    if not (order_by_column.isalnum() or order_by_column == '_'):
-        logging.error(f"SEGURIDAD: Intento de inyección SQL en parámetro 'order_by_column': {order_by_column}")
+    # La validación de 'columns' puede mantenerse como estaba, aunque es menos común que cambie.
+    if not all(c.isalnum() or c in ['_', '*', ','] for c in columns):
+        current_app.logger.error(f"SEGURIDAD: Caracteres no válidos en el parámetro 'columns': {columns}")
         return []
 
     sql = f"SELECT {columns} FROM {catalog_name} ORDER BY {order_by_column}"
     
-    # Usamos nuestra función de ayuda segura que ya maneja errores y logging.
     return _execute_select(conn, sql)
 
 
