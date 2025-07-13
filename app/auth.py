@@ -4,7 +4,7 @@ import jwt
 import os
 from functools import wraps
 from flask import request, jsonify, g, current_app
-from . import db as database ### CTO: 1. Importamos nuestro módulo de base de datos.
+from app import database
 
 def db_connection_managed(f):
     """
