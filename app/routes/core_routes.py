@@ -4,18 +4,26 @@ from decimal import Decimal
 import json, io, zipfile, os
 import docxtpl
 
+# CTO: 1. Importamos los módulos específicos, NO el antiguo 'database'
 from app.auth import token_required
-from app.models import instalacion_model, cliente_model, promotor_model, instalador_model
+from app.services import doc_generator_service 
+from app.models import (
+    instalacion_model, 
+    cliente_model, 
+    promotor_model, 
+    instalador_model,
+    catalog_model # Para las funciones get_..._by_name
+)
 # NOTA: las funciones get_..._by_name ahora estarán en el modelo de instalación por dependencia
 # from app.services import calculation_service # Placeholder para futura refactorización de `calc.py`
 
 bp = Blueprint('core', __name__)
 
 def _sanitize_instalacion_data(data: dict) -> dict:
-    numeric_fields = [ 'numero_paneles', 'numero_inversores', 'numero_baterias', 'potencia_contratada_w', 'longitud_cable_cc_string1', 'seccion_cable_ac_mm2', 'longitud_cable_ac_m', 'diferencial_a', 'sensibilidad_ma' ]
+    numeric_fields = ['numero_paneles', 'numero_inversores', 'numero_baterias', 'potencia_contratada_w', 'longitud_cable_cc_string1', 'seccion_cable_ac_mm2', 'longitud_cable_ac_m', 'diferencial_a', 'sensibilidad_ma']
     sanitized_data = data.copy()
     for field in numeric_fields:
-        if field in sanitized_data and sanitized_data[field] == '':
+        if field in sanitized_data and (sanitized_data[field] == '' or sanitized_data[field] is None):
             sanitized_data[field] = None
     return sanitized_data
 
@@ -23,7 +31,9 @@ def _sanitize_instalacion_data(data: dict) -> dict:
 @bp.route('/clientes', methods=['GET'])
 @token_required
 def get_clientes(conn):
-    return jsonify(cliente_model.get_all_clientes(conn, g.user_id))
+    # CTO: 2. Usamos el modelo específico: cliente_model
+    clientes = cliente_model.get_all_clientes(conn, g.user_id)
+    return jsonify([dict(c) for c in clientes])
 
 @bp.route('/clientes/<int:cliente_id>', methods=['GET'])
 @token_required
@@ -57,13 +67,13 @@ def delete_cliente(conn, cliente_id):
 @bp.route('/promotores', methods=['GET'])
 @token_required
 def get_promotores(conn):
-    promotores = database.get_all_promotores(conn, g.user_id)
+    promotores = promotor_model.get_all_promotores(conn, g.user_id)
     return jsonify(promotores)
 
 @bp.route('/promotores/<int:promotor_id>', methods=['GET'])
 @token_required
 def get_promotor(conn, promotor_id):
-    promotor = database.get_promotor_by_id(conn, promotor_id, g.user_id)
+    promotor = promotor_model.get_promotor_by_id(conn, promotor_id, g.user_id)
     if promotor:
         return jsonify(dict(promotor))
     return jsonify({'error': 'Promotor no encontrado o no pertenece a este usuario'}), 404
@@ -76,7 +86,7 @@ def create_promotor(conn):
         return jsonify({'error': 'Faltan campos obligatorios: nombre_razon_social y dni_cif'}), 400
     
     data['app_user_id'] = g.user_id
-    new_id, message = database.add_promotor(conn, data)
+    new_id, message = promotor_model.add_promotor(conn, data)
     
     if new_id is not None:
         return jsonify({'id': new_id, 'message': message}), 201
@@ -88,7 +98,7 @@ def create_promotor(conn):
 @token_required
 def update_promotor_api(conn, promotor_id):
     data = request.json
-    success, message = database.update_promotor(conn, promotor_id, g.user_id, data)
+    success, message = promotor_model.update_promotor(conn, promotor_id, g.user_id, data)
     
     if success:
         return jsonify({'message': 'Promotor actualizado'}), 200
@@ -99,7 +109,7 @@ def update_promotor_api(conn, promotor_id):
 @bp.route('/promotores/<int:promotor_id>', methods=['DELETE'])
 @token_required
 def delete_promotor_api(conn, promotor_id):
-    success, message = database.delete_promotor(conn, promotor_id, g.user_id)
+    success, message = promotor_model.delete_promotor(conn, promotor_id, g.user_id)
     if success:
         return jsonify({'message': message}), 200
     return jsonify({'error': message}), 404
@@ -109,13 +119,13 @@ def delete_promotor_api(conn, promotor_id):
 @bp.route('/instaladores', methods=['GET'])
 @token_required
 def get_instaladores(conn):
-    instaladores = database.get_all_instaladores(conn, g.user_id)
+    instaladores = instalador_model.get_all_instaladores(conn, g.user_id)
     return jsonify(instaladores)
 
 @bp.route('/instaladores/<int:instalador_id>', methods=['GET'])
 @token_required
 def get_instalador(conn, instalador_id):
-    instalador = database.get_instalador_by_id(conn, instalador_id, g.user_id)
+    instalador = instalador_model.get_instalador_by_id(conn, instalador_id, g.user_id)
     if instalador:
         return jsonify(dict(instalador))
     return jsonify({'error': 'Instalador no encontrado o no pertenece a este usuario'}), 404
@@ -128,7 +138,7 @@ def create_instalador(conn):
         return jsonify({'error': 'Faltan campos obligatorios: nombre_empresa y cif_empresa'}), 400
 
     data['app_user_id'] = g.user_id
-    new_id, message = database.add_instalador(conn, data)
+    new_id, message = instalador_model.add_instalador(conn, data)
     
     if new_id is not None:
         return jsonify({'id': new_id, 'message': message}), 201
@@ -140,7 +150,7 @@ def create_instalador(conn):
 @token_required
 def update_instalador_api(conn, instalador_id):
     data = request.json
-    success, message = database.update_instalador(conn, instalador_id, g.user_id, data)
+    success, message = instalador_model.update_instalador(conn, instalador_id, g.user_id, data)
     
     if success:
         return jsonify({'message': 'Instalador actualizado'}), 200
@@ -151,7 +161,7 @@ def update_instalador_api(conn, instalador_id):
 @bp.route('/instaladores/<int:instalador_id>', methods=['DELETE'])
 @token_required
 def delete_instalador_api(conn, instalador_id):
-    success, message = database.delete_instalador(conn, instalador_id, g.user_id)
+    success, message = instalador_model.delete_instalador(conn, instalador_id, g.user_id)
     if success:
         return jsonify({'message': message}), 200
     return jsonify({'error': message}), 404
@@ -182,7 +192,7 @@ def create_instalacion(conn):
     sanitized_data = _sanitize_instalacion_data(data)
     
     try:
-        new_id, message = database.add_instalacion(conn, sanitized_data)
+        new_id, message = instalacion_model.add_instalacion(conn, sanitized_data)
         if new_id is not None:
             return jsonify({'id': new_id, 'message': message}), 201
         else:
@@ -200,7 +210,7 @@ def update_instalacion_endpoint(conn, instalacion_id):
     sanitized_data = _sanitize_instalacion_data(data)
 
     try:
-        success, message = database.update_instalacion(conn, instalacion_id, g.user_id, sanitized_data)
+        success, message = instalacion_model.update_instalacion(conn, instalacion_id, g.user_id, sanitized_data)
         if success:
             return jsonify({'message': 'Proyecto actualizado'}), 200
         else:
@@ -214,7 +224,7 @@ def update_instalacion_endpoint(conn, instalacion_id):
 @token_required
 def delete_instalacion_api(conn, instalacion_id):
     try:
-        success, message = database.delete_instalacion(conn, instalacion_id, g.user_id)
+        success, message = instalacion_model.delete_instalacion(conn, instalacion_id, g.user_id)
         if success:
             return jsonify({'message': 'Instalación eliminada correctamente'}), 200
         else:
@@ -240,39 +250,39 @@ def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión
     try:
         # La lógica de negocio principal empieza aquí directamente.
         # El chequeo de `g.user_id` asegura que solo el dueño puede generar los documentos.
-        instalacion_completa = database.get_instalacion_completa(conn, instalacion_id, g.user_id)
+        instalacion_completa = instalacion_model.get_instalacion_completa(conn, instalacion_id, g.user_id)
         if not instalacion_completa:
             # Este mensaje es seguro, ya que no revela la existencia de la instalación a otros usuarios.
             return jsonify({"error": "Instalación no encontrada o no pertenece a este usuario"}), 404
 
-        contexto_final = dict(instalacion_completa)
+        contexto_base = dict(instalacion_completa)
         
         # --- Construcción del contexto (esta lógica era correcta y se mantiene) ---
-        contexto_final.update({
-            'clienteNombre': contexto_final.get('promotor_nombre', ''),
-            'clienteDireccion': contexto_final.get('promotor_direccion', ''),
-            'clienteDni': contexto_final.get('promotor_cif', ''),
-            'instaladorEmpresa': contexto_final.get('instalador_empresa', ''),
-            'instaladorDireccion': contexto_final.get('instalador_direccion', ''),
-            'instaladorCif': contexto_final.get('instalador_cif', ''),
-            'instaladorTecnicoNombre': contexto_final.get('instalador_tecnico_nombre', ''),
-            'instaladorTecnicoCompetencia': contexto_final.get('instalador_tecnico_competencia', '')
+        contexto_base.update({
+            'clienteNombre': contexto_base.get('promotor_nombre', ''),
+            'clienteDireccion': contexto_base.get('promotor_direccion', ''),
+            'clienteDni': contexto_base.get('promotor_cif', ''),
+            'instaladorEmpresa': contexto_base.get('instalador_empresa', ''),
+            'instaladorDireccion': contexto_base.get('instalador_direccion', ''),
+            'instaladorCif': contexto_base.get('instalador_cif', ''),
+            'instaladorTecnicoNombre': contexto_base.get('instalador_tecnico_nombre', ''),
+            'instaladorTecnicoCompetencia': contexto_base.get('instalador_tecnico_competencia', '')
         })
 
-        if nombre_panel := contexto_final.get('panel_solar'):
-            if panel_data := database.get_panel_by_name(conn, nombre_panel):
-                contexto_final.update(dict(panel_data))
+        if nombre_panel := contexto_base.get('panel_solar'):
+            if panel_data := catalog_model.get_panel_by_name(conn, nombre_panel):
+                contexto_base.update(dict(panel_data))
 
-        if nombre_inversor := contexto_final.get('inversor'):
-            if inversor_data := database.get_inversor_by_name(conn, nombre_inversor):
-                contexto_final.update(dict(inversor_data))
+        if nombre_inversor := contexto_base.get('inversor'):
+            if inversor_data := catalog_model.get_inversor_by_name(conn, nombre_inversor):
+                contexto_base.update(dict(inversor_data))
         
-        if nombre_bateria := contexto_final.get('bateria'):
-             if bateria_data := database.get_bateria_by_name(conn, nombre_bateria):
-                 contexto_final.update(dict(bateria_data))
+        if nombre_bateria := contexto_base.get('bateria'):
+             if bateria_data := catalog_model.get_bateria_by_name(conn, nombre_bateria):
+                 contexto_base.update(dict(bateria_data))
 
-        contexto_calculado = calculations.calculate_all_derived_data(contexto_final.copy(), conn)
-        contexto_final.update(contexto_calculado)
+        contexto_final = doc_generator_service.prepare_document_context(contexto_base)
+        contexto_final.update(contexto_final)
         
         # --- Logging seguro del contexto (esta lógica era correcta y se mantiene) ---
         contexto_para_log = {
@@ -286,6 +296,10 @@ def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión
         available_templates_map = {
             "MEMORIA TECNICA.docx": "Memoria Tecnica Instalacion {}.docx",
             "DECLARACION RESPONSABLE.docx": "Declaracion de responsable {}.docx",
+            "ESTUDIO BASICO SEG Y SALUD.docx": "Estudio Basico de Seguridad y Salud {}.docx",
+            "GESTION RESIDUOS.docx": "Gestion de Residuos {}.docx",
+            "PLAN DE CONTROL DE CALIDAD.docx": "Plan de Control De Calidad {}.docx",
+            "CERTIFICADO FIN DE OBRA.docx": "Certificado Fin de Obra {}.docx",
             # ... resto de plantillas
         }
         templates_base_path = current_app.config.get('TEMPLATES_PATH', './templates')
