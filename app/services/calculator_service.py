@@ -466,7 +466,7 @@ class ElectricalCalculator:
             "d2_distance_m": { "value": round(d2, 2), "unit": "m" }
         }
     
-    def calculate_voltage_drop(self, current: Dict, length: Dict, wire_cross_section: Dict, material: str, system_type: str, source_voltage: Dict, power_factor: float = 1.0) -> Dict:
+    def calculate_voltage_drop(self, current: dict, length: dict, wire_cross_section: dict, material: str, system_type: str, source_voltage: dict, power_factor: float = 1.0) -> dict:
         I = self._normalize_current(current)
         L = self._normalize_length(length)
         S = self._normalize_cross_section(wire_cross_section)
@@ -475,11 +475,29 @@ class ElectricalCalculator:
         rho = self.RESISTIVIDAD_COBRE if material.lower() == 'cobre' else self.RESISTIVIDAD_ALUMINIO
         
         if system_type.lower() == 'monofasico':
-            drop_v = (2 * L * rho * I) / S
+            voltage_drop_v = (2 * L * rho * I) / S
         else:
-            drop_v = (math.sqrt(3) * L * rho * I * power_factor) / S
-            
-        drop_pct = (drop_v / V_source) * 100 if V_source > 0 else float('inf')
+            voltage_drop_v = (math.sqrt(3) * L * rho * I * power_factor) / S
         
-        return { "voltage_drop_volts": {"value": round(drop_v, 2)}, "voltage_drop_percent": {"value": round(drop_pct, 2)} }
+        voltage_at_load_v = V_source - voltage_drop_v
+        voltage_drop_pct = (voltage_drop_v / V_source) * 100 if V_source > 0 else float('inf')
+
+        ### CTO: CORRECCIÓN - Devolvemos la estructura COMPLETA con los 3 campos.
+        return {
+            "voltage_drop_volts": {
+                "value": round(voltage_drop_v, 2),
+                "unit": "V",
+                "info": "Tensión total perdida."
+            },
+            "voltage_drop_percent": {
+                "value": round(voltage_drop_pct, 2),
+                "unit": "%",
+                "info": "Porcentaje de la tensión de origen perdida."
+            },
+            "voltage_at_load": {
+                "value": round(voltage_at_load_v, 2),
+                "unit": "V",
+                "info": "Tensión efectiva en la carga."
+            }
+        }
 

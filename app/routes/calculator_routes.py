@@ -23,7 +23,7 @@ def calculate_voltage_drop_endpoint(conn):
         current_app.logger.error(f"Error en la calculadora: {e}", exc_info=True)
         return jsonify({"error": "Error interno"}), 500
 
-@bp.route('/calculator/wire-section', methods=['POST'])
+@bp.route('/wire-section', methods=['POST'])
 @token_required
 def calculate_wire_section_endpoint(conn): # Acepta 'conn'
     data = request.json
@@ -46,7 +46,7 @@ def calculate_wire_section_endpoint(conn): # Acepta 'conn'
         return jsonify({"error": "Error interno del servidor."}), 500
 
 
-@bp.route('/calculator/panel-separation', methods=['POST'])
+@bp.route('/panel-separation', methods=['POST'])
 @token_required
 def calculate_panel_separation_endpoint(conn): # Acepta 'conn'
     data = request.json
@@ -58,7 +58,7 @@ def calculate_panel_separation_endpoint(conn): # Acepta 'conn'
         return jsonify({"error": f"Datos de entrada inválidos: {e}"}), 400
         
 # Endpoints Placeholder para los cálculos complejos
-@bp.route('/calculator/current', methods=['POST'])
+@bp.route('/current', methods=['POST'])
 @token_required
 def calculate_current_endpoint(conn): # <-- LA CORRECCIÓN CLAVE
     """
@@ -79,7 +79,7 @@ def calculate_current_endpoint(conn): # <-- LA CORRECCIÓN CLAVE
         return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
 
 
-@bp.route('/calculator/voltage', methods=['POST'])
+@bp.route('/voltage', methods=['POST'])
 @token_required
 def calculate_voltage_endpoint(conn): # <-- LA CORRECCIÓN CLAVE
     """
@@ -100,7 +100,7 @@ def calculate_voltage_endpoint(conn): # <-- LA CORRECCIÓN CLAVE
         return jsonify({"error": "Error interno del servidor en el cálculo."}), 500
 
 
-@bp.route('/calculator/protections', methods=['POST'])
+@bp.route('/protections', methods=['POST'])
 @token_required
 def calculate_protections_endpoint(conn): # <-- LA CORRECCIÓN CLAVE
     """
