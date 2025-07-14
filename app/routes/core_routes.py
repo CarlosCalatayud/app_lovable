@@ -45,9 +45,19 @@ def get_cliente(conn, cliente_id):
 @token_required
 def create_cliente(conn):
     data = request.json
+    # Validación básica de la entrada
+    if not all(k in data for k in ['nombre', 'dni', 'direccion']) or not all(k in data['direccion'] for k in ['nombre_via', 'localidad', 'provincia']):
+        return jsonify({'error': 'Datos insuficientes para crear el cliente y su dirección'}), 400
+    
     data['app_user_id'] = g.user_id
-    new_id, message = cliente_model.add_cliente(conn, data)
-    return (jsonify({'id': new_id, 'message': message}), 201) if new_id else (jsonify({'error': message}), 409)
+    
+    # La ruta confía en el modelo para manejar la lógica compleja
+    cliente_id, message = cliente_model.add_cliente(conn, data)
+    
+    if cliente_id:
+        return jsonify({'id': cliente_id, 'message': message}), 201
+    else:
+        return jsonify({'error': message}), 400
 
 @bp.route('/clientes/<int:cliente_id>', methods=['PUT'])
 @token_required
