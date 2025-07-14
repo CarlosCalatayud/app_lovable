@@ -32,145 +32,66 @@ def get_cliente_by_id(conn, cliente_id, app_user_id):
 
 # --- ESCRITURA (ahora es una transacción) ---
 def add_cliente(conn, data):
-    """
-    Añade un cliente y su dirección en una única transacción.
-    'data' debe ser un diccionario que contenga una sub-clave 'direccion'.
-    """
     direccion_data = data.get('direccion', {})
-    direccion_id = None
-
     try:
-        # CTO: 'with conn:' en Psycopg2 inicia una transacción. Si hay un error, se hace rollback automáticamente.
-        with conn.cursor() as cursor:
-            # Paso 1: Crear la dirección primero para obtener su ID.
-            sql_direccion = """
-                INSERT INTO direcciones (alias, tipo_via_id, nombre_via, numero_via, piso_puerta, codigo_postal, localidad, provincia)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
-            """
-            cursor.execute(sql_direccion, (
-                direccion_data.get('alias', 'Dirección Principal'),
-                direccion_data.get('tipo_via_id'),
-                direccion_data.get('nombre_via'),
-                direccion_data.get('numero_via'),
-                direccion_data.get('piso_puerta'),
-                direccion_data.get('codigo_postal'),
-                direccion_data.get('localidad'),
-                direccion_data.get('provincia')
-            ))
-            # Obtenemos el ID de la dirección recién creada
-            direccion_id = cursor.fetchone()['id']
-            
-            # Paso 2: Crear el cliente usando el ID de la dirección.
-            sql_cliente = """
-                INSERT INTO clientes (app_user_id, nombre, apellidos, dni, direccion_id)
-                VALUES (%s, %s, %s, %s, %s) RETURNING id;
-            """
-            cursor.execute(sql_cliente, (
-                data['app_user_id'],
-                data.get('nombre'),
-                data.get('apellidos'),
-                data.get('dni'),
-                direccion_id  # Usamos el ID que obtuvimos en el paso anterior
-            ))
-            cliente_id = cursor.fetchone()['id']
+        # CTO: LA CORRECCIÓN CLAVE. `with conn:` inicia una transacción y
+        # hace COMMIT automáticamente si el bloque termina sin errores,
+        # o ROLLBACK si ocurre una excepción.
+        with conn:
+            with conn.cursor() as cursor:
+                # Paso 1: Crear la dirección
+                sql_direccion = "INSERT INTO direcciones (alias, tipo_via_id, nombre_via, numero_via, piso_puerta, codigo_postal, localidad, provincia) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;"
+                cursor.execute(sql_direccion, (direccion_data.get('alias', 'Dirección Principal'), direccion_data.get('tipo_via_id'), direccion_data.get('nombre_via'), direccion_data.get('numero_via'), direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'), direccion_data.get('localidad'), direccion_data.get('provincia')))
+                direccion_id = cursor.fetchone()['id']
+                
+                # Paso 2: Crear el cliente
+                sql_cliente = "INSERT INTO clientes (app_user_id, nombre, apellidos, dni, direccion_id) VALUES (%s, %s, %s, %s, %s) RETURNING id;"
+                cursor.execute(sql_cliente, (data['app_user_id'], data.get('nombre'), data.get('apellidos'), data.get('dni'), direccion_id))
+                cliente_id = cursor.fetchone()['id']
 
-        # Si el bloque 'with' termina sin errores, Psycopg2 hace commit automáticamente.
-        logging.info(f"Éxito transaccional. Cliente creado ID: {cliente_id}, Dirección ID: {direccion_id}")
+        logging.info(f"Éxito transaccional y COMMIT realizado. Cliente ID: {cliente_id}")
         return cliente_id, "Cliente creado correctamente."
-
     except Exception as e:
-        # El rollback es automático. Solo necesitamos registrar el error.
-        logging.error(f"Fallo en la transacción de añadir cliente: {e}")
+        # El rollback es automático gracias a 'with conn:'.
+        logging.error(f"Fallo en transacción de añadir cliente (ROLLBACK automático): {e}")
         return None, f"Error en la base de datos: {e}"
 
 def update_cliente(conn, cliente_id, app_user_id, data):
-    """
-    Actualiza un cliente y su dirección asociada en una única transacción.
-    """
     direccion_data = data.get('direccion', {})
-    
     try:
-        with conn.cursor() as cursor:
-            # Primero, necesitamos el direccion_id del cliente que vamos a actualizar.
-            # Esto también verifica que el cliente pertenece al usuario (seguridad).
-            cursor.execute(
-                "SELECT direccion_id FROM clientes WHERE id = %s AND app_user_id = %s",
-                (cliente_id, app_user_id)
-            )
-            result = cursor.fetchone()
-            if not result:
-                # Si no hay resultado, el cliente no existe o no pertenece al usuario.
-                raise ValueError("Cliente no encontrado o no autorizado para esta operación.")
-            
-            direccion_id = result['direccion_id']
-
-            # Paso 1: Actualizar la dirección existente si se proporcionan datos de dirección.
-            if direccion_data and direccion_id is not None:
-                sql_update_direccion = """
-                    UPDATE direcciones SET
-                        alias = %s, tipo_via_id = %s, nombre_via = %s, numero_via = %s,
-                        piso_puerta = %s, codigo_postal = %s, localidad = %s, provincia = %s
-                    WHERE id = %s;
-                """
-                cursor.execute(sql_update_direccion, (
-                    direccion_data.get('alias'), direccion_data.get('tipo_via_id'),
-                    direccion_data.get('nombre_via'), direccion_data.get('numero_via'),
-                    direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'),
-                    direccion_data.get('localidad'), direccion_data.get('provincia'),
-                    direccion_id
-                ))
-
-            # Paso 2: Actualizar los datos del cliente.
-            sql_update_cliente = """
-                UPDATE clientes SET
-                    nombre = %s, apellidos = %s, dni = %s
-                WHERE id = %s;
-            """
-            cursor.execute(sql_update_cliente, (
-                data.get('nombre'), data.get('apellidos'), data.get('dni'),
-                cliente_id
-            ))
-        
-        # El bloque 'with' se encarga del commit al salir sin errores.
-        logging.info(f"Cliente ID: {cliente_id} y Dirección ID: {direccion_id} actualizados.")
+        with conn: # Usamos la misma estructura transaccional
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT direccion_id FROM clientes WHERE id = %s AND app_user_id = %s", (cliente_id, app_user_id))
+                result = cursor.fetchone()
+                if not result: raise ValueError("Cliente no encontrado o no autorizado.")
+                
+                direccion_id = result['direccion_id']
+                if direccion_data and direccion_id is not None:
+                    sql_update_direccion = "UPDATE direcciones SET alias = %s, tipo_via_id = %s, nombre_via = %s, numero_via = %s, piso_puerta = %s, codigo_postal = %s, localidad = %s, provincia = %s WHERE id = %s;"
+                    cursor.execute(sql_update_direccion, (direccion_data.get('alias'), direccion_data.get('tipo_via_id'), direccion_data.get('nombre_via'), direccion_data.get('numero_via'), direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'), direccion_data.get('localidad'), direccion_data.get('provincia'), direccion_id))
+                
+                sql_update_cliente = "UPDATE clientes SET nombre = %s, apellidos = %s, dni = %s WHERE id = %s;"
+                cursor.execute(sql_update_cliente, (data.get('nombre'), data.get('apellidos'), data.get('dni'), cliente_id))
+        logging.info(f"Cliente ID: {cliente_id} actualizado y COMMIT realizado.")
         return True, "Cliente actualizado correctamente."
-
     except Exception as e:
-        # El rollback es automático.
-        logging.error(f"Fallo en la transacción de actualizar cliente: {e}")
+        logging.error(f"Fallo en transacción de actualizar cliente (ROLLBACK automático): {e}")
         return False, f"Error al actualizar el cliente: {e}"
 
 def delete_cliente(conn, cliente_id, app_user_id):
-    """
-    Elimina un cliente y su dirección asociada en una única transacción.
-    """
     try:
-        with conn.cursor() as cursor:
-            # Paso 1: Obtener el direccion_id antes de borrar, y verificar la propiedad.
-            cursor.execute(
-                "SELECT direccion_id FROM clientes WHERE id = %s AND app_user_id = %s",
-                (cliente_id, app_user_id)
-            )
-            result = cursor.fetchone()
-            if not result:
-                raise ValueError("Cliente no encontrado o no autorizado para esta operación.")
-            
-            direccion_id = result['direccion_id']
-
-            # Paso 2: Eliminar al cliente. La base de datos (con ON DELETE SET NULL) podría manejar esto,
-            # pero ser explícitos nos da más control.
-            cursor.execute("DELETE FROM clientes WHERE id = %s", (cliente_id,))
-            
-            # Paso 3: Eliminar la dirección asociada, si existe.
-            if direccion_id is not None:
-                # Opcional: Podrías añadir lógica aquí para comprobar si otra entidad usa esta misma dirección.
-                # Por ahora, la eliminamos directamente.
-                cursor.execute("DELETE FROM direcciones WHERE id = %s", (direccion_id,))
-
-        # Commit automático al salir del bloque 'with'.
-        logging.info(f"Cliente ID: {cliente_id} y su Dirección ID: {direccion_id} eliminados.")
+        with conn: # Y de nuevo, la misma estructura transaccional
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT direccion_id FROM clientes WHERE id = %s AND app_user_id = %s", (cliente_id, app_user_id))
+                result = cursor.fetchone()
+                if not result: raise ValueError("Cliente no encontrado o no autorizado.")
+                
+                direccion_id = result['direccion_id']
+                cursor.execute("DELETE FROM clientes WHERE id = %s", (cliente_id,))
+                if direccion_id is not None:
+                    cursor.execute("DELETE FROM direcciones WHERE id = %s", (direccion_id,))
+        logging.info(f"Cliente ID: {cliente_id} eliminado y COMMIT realizado.")
         return True, "Cliente eliminado correctamente."
-
     except Exception as e:
-        logging.error(f"Fallo en la transacción de eliminar cliente: {e}")
+        logging.error(f"Fallo en transacción de eliminar cliente (ROLLBACK automático): {e}")
         return False, f"Error al eliminar el cliente: {e}"
