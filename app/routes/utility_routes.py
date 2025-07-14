@@ -2,43 +2,76 @@
 
 import os
 from flask import Blueprint, jsonify, current_app
-# CTO: Importamos las funciones de setup desde su nueva ubicación
-from app.database import create_tables, populate_initial_data
+# CTO: Importamos solo la función de conexión.
+from app.database import connect_db
+import logging
 
 bp = Blueprint('utility', __name__)
 
-@bp.route('/hello')
-def hello():
-    return '¡Hola! La API está funcionando.'
+# --- DATOS DE EJEMPLO PARA POBLAR LOS CATÁLOGOS ---
+# CTO: Hemos movido la lógica de datos aquí para que sea más fácil de gestionar.
+CATALOG_DATA = {
+    'tipos_vias': [('Calle',), ('Avenida',), ('Plaza',), ('Paseo',), ('Carretera',)],
+    'tipos_finca': [('Vivienda unifamiliar',), ('Vivienda adosada',), ('Edificio residencial',), ('Nave industrial',)],
+    'categorias_instalador': [('Básica',), ('Especialista',)],
+    'tipos_cable': [('Cable de CC',), ('Cable de CA',), ('Puesta a Tierra',)],
+    'distribuidoras': [
+        ('0021', 'I-DE REDES ELÉCTRICAS INTELIGENTES'),
+        ('0022', 'UFD DISTRIBUCIÓN ELECTRICIDAD')
+    ],
+    'paneles_solares': [
+        ('Panel Genérico 450W', 450),
+        ('Panel Premium 550W', 550),
+        ('Panel Eco 400W', 400)
+    ],
+    'inversores': [
+        ('Inversor Monofásico 3kW', 'monofasico'),
+        ('Inversor Monofásico 5kW', 'monofasico'),
+        ('Inversor Trifásico 10kW', 'trifasico')
+    ],
+    'baterias': [
+        ('Batería LFP 5kWh', 5.0),
+        ('Batería LFP 10kWh', 10.0),
+        ('Sin Batería', 0.0)
+    ]
+}
 
-# --- ENDPOINTS SEGUROS PARA SETUP DE LA BASE DE DATOS ---
+def _populate_data(cursor, table_name, columns, data):
+    """Función de ayuda para insertar datos de forma segura."""
+    # ON CONFLICT DO NOTHING evita errores si los datos ya existen.
+    placeholders = ', '.join(['%s'] * len(columns))
+    sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+    cursor.executemany(sql, data)
+    logging.info(f"Tabla '{table_name}' poblada/verificada.")
 
-@bp.route('/setup/structure/<path:secret_key>')
-def setup_database_structure_endpoint(secret_key):
+@bp.route('/setup/populate-all-catalogs/<path:secret_key>')
+def setup_populate_catalogs_endpoint(secret_key):
+    """
+    Endpoint seguro para poblar TODAS las tablas de catálogo con datos de ejemplo.
+    """
     expected_key = os.environ.get('SETUP_SECRET_KEY')
     if not expected_key or secret_key != expected_key:
-        return jsonify({"error": "Clave secreta no válida o no configurada."}), 403
-
+        return jsonify({"error": "Clave secreta no válida."}), 403
+    
+    conn = None
     try:
-        current_app.logger.info("--- Iniciando CREACIÓN DE TABLAS ---")
-        create_tables()
-        current_app.logger.info("--- CREACIÓN DE TABLAS completada ---")
-        return jsonify({"status": "success", "message": "Estructura de la base de datos creada."}), 200
-    except Exception as e:
-        current_app.logger.error(f"Error durante la creación de tablas: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        conn = connect_db()
+        with conn.cursor() as cursor:
+            _populate_data(cursor, 'tipos_vias', ['nombre_tipo_via'], CATALOG_DATA['tipos_vias'])
+            _populate_data(cursor, 'tipos_finca', ['nombre_tipo_finca'], CATALOG_DATA['tipos_finca'])
+            _populate_data(cursor, 'categorias_instalador', ['nombre_categoria'], CATALOG_DATA['categorias_instalador'])
+            _populate_data(cursor, 'tipos_cable', ['nombre'], CATALOG_DATA['tipos_cable'])
+            _populate_data(cursor, 'distribuidoras', ['codigo_distribuidora', 'nombre_distribuidora'], CATALOG_DATA['distribuidoras'])
+            _populate_data(cursor, 'paneles_solares', ['nombre_panel', 'potencia_pico_w'], CATALOG_DATA['paneles_solares'])
+            _populate_data(cursor, 'inversores', ['nombre_inversor', 'monofasico_trifasico'], CATALOG_DATA['inversores'])
+            _populate_data(cursor, 'baterias', ['nombre_bateria', 'capacidad_kwh'], CATALOG_DATA['baterias'])
+        
+        conn.commit()
+        return jsonify({"status": "success", "message": "Todos los catálogos han sido poblados con datos de ejemplo."}), 200
 
-@bp.route('/setup/data/<path:secret_key>')
-def setup_database_data_endpoint(secret_key):
-    expected_key = os.environ.get('SETUP_SECRET_KEY')
-    if not expected_key or secret_key != expected_key:
-        return jsonify({"error": "Clave secreta no válida o no configurada."}), 403
-
-    try:
-        current_app.logger.info("--- Iniciando POBLACIÓN DE DATOS ---")
-        populate_initial_data()
-        current_app.logger.info("--- POBLACIÓN DE DATOS completada ---")
-        return jsonify({"status": "success", "message": "Datos iniciales insertados."}), 200
     except Exception as e:
-        current_app.logger.error(f"Error durante la población de datos: {e}", exc_info=True)
+        if conn: conn.rollback()
+        current_app.logger.error(f"Error al poblar los catálogos: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        if conn: conn.close()
