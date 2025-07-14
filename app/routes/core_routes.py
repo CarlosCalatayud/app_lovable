@@ -194,23 +194,27 @@ def get_instalacion_detalle(conn, instalacion_id):
 @token_required
 def create_instalacion(conn):
     data = request.json
-    if not data or not data.get('descripcion'):
-        return jsonify({'error': 'Falta la descripción del proyecto'}), 400
+    
+    # CTO: Validación de entrada robusta
+    # Verificamos que los IDs de las entidades principales existen
+    required_ids = ['cliente_id', 'promotor_id', 'instalador_id', 'panel_solar_id', 'inversor_id']
+    if not all(field in data for field in required_ids):
+        return jsonify({'error': 'Faltan IDs de entidades obligatorias (cliente, promotor, instalador, panel, inversor).'}), 400
+
+    # Verificamos que la dirección de emplazamiento tiene datos mínimos
+    if 'direccion_emplazamiento' not in data or not all(k in data['direccion_emplazamiento'] for k in ['nombre_via', 'localidad', 'provincia']):
+        return jsonify({'error': 'Faltan datos en la dirección de emplazamiento.'}), 400
+
     
     data['app_user_id'] = g.user_id
-        # CTO: Limpiamos los datos antes de enviarlos a la BD
-    sanitized_data = _sanitize_instalacion_data(data)
+
+    instalacion_id, message = instalacion_model.add_instalacion(conn, data, g.user_id) # Pasamos el app_user_id
     
-    try:
-        new_id, message = instalacion_model.add_instalacion(conn, sanitized_data)
-        if new_id is not None:
-            return jsonify({'id': new_id, 'message': message}), 201
-        else:
-            # El error ahora será más específico gracias a nuestro db.py
-            return jsonify({'error': message}), 400
-    except Exception as e:
-        current_app.logger.error(f"Excepción en create_instalacion: {e}", exc_info=True)
-        return jsonify({'error': 'Error interno del servidor'}), 500
+    if instalacion_id:
+        return jsonify({'id': instalacion_id, 'message': message}), 201
+    else:
+        return jsonify({'error': message}), 400
+
 
 @bp.route('/instalaciones/<int:instalacion_id>', methods=['PUT'])
 @token_required

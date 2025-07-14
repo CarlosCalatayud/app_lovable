@@ -1,94 +1,135 @@
 # app/models/instalacion_model.py
-from .base_model import _execute_select, _execute_insert, _execute_update_delete
 
+import logging
+from .base_model import _execute_select
 
-# --- Instalaciones ---
-
-def add_instalacion(conn, data_dict):
-    """Añade una nueva instalación usando un diccionario de datos."""
-    fields = [
-        'app_user_id', 'descripcion', 'cliente_id', 'promotor_id', 'instalador_id',
-        'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via', 'piso_puerta',
-        'codigo_postal', 'localidad', 'provincia', 'referencia_catastral', 'tipo_finca',
-        'panel_solar', 'numero_paneles', 'inversor', 'numero_inversores', 'bateria',
-        'numero_baterias', 'distribuidora', 'cups', 'potencia_contratada_w',
-        'tipo_de_estructura', 'tipo_de_cubierta', 'material_cableado', 'longitud_cable_cc_string1',
-        'seccion_cable_ac_mm2', 'longitud_cable_ac_m', 'protector_sobretensiones',
-        'diferencial_a', 'sensibilidad_ma'
-    ]
-    columns_to_insert = [f for f in fields if f in data_dict]
-    if 'app_user_id' not in columns_to_insert:
-        return None, "Error crítico: Falta el app_user_id para crear la instalación."
-    values_to_insert = [data_dict[f] for f in columns_to_insert]
-    placeholders = ', '.join(['?'] * len(columns_to_insert))
-    sql = f"INSERT INTO instalaciones ({', '.join(columns_to_insert)}) VALUES ({placeholders})"
-    return _execute_insert(conn, sql, tuple(values_to_insert))
-
-def get_all_instalaciones(conn, app_user_id, ciudad=None):
-    """Obtiene todas las instalaciones de un usuario, con filtrado opcional por ciudad."""
-    params = [app_user_id]
-    sql = "SELECT id, descripcion, fecha_creacion, provincia, localidad FROM instalaciones WHERE app_user_id = ?"
-    if ciudad:
-        sql += " AND lower(localidad) LIKE ?"
-        params.append(f"%{ciudad.lower()}%")
-    sql += " ORDER BY fecha_creacion DESC"
-    return _execute_select(conn, sql, tuple(params))
+# --- LECTURA ---
+def get_all_instalaciones(conn, app_user_id):
+    # Obtenemos solo un resumen para la lista principal
+    sql = """
+        SELECT i.id, i.descripcion, d.localidad, d.provincia, i.fecha_creacion
+        FROM instalaciones i
+        JOIN clientes c ON i.cliente_id = c.id
+        LEFT JOIN direcciones d ON i.direccion_emplazamiento_id = d.id
+        WHERE c.app_user_id = %s -- La seguridad se basa en el dueño del cliente
+        ORDER BY i.fecha_creacion DESC
+    """
+    # NOTA: La seguridad aquí es a través del app_user_id del cliente asociado a la instalación.
+    # Necesitas un app_user_id en la tabla de instalaciones también para una seguridad directa.
+    # Por ahora, asumimos que el JOIN con clientes es suficiente.
+    return _execute_select(conn, sql, (app_user_id,))
 
 def get_instalacion_completa(conn, instalacion_id, app_user_id):
-    """Obtiene todos los datos de una instalación específica, verificando que pertenece al usuario."""
+    # Esta es la consulta más grande. Une todas las piezas.
     sql = """
-    SELECT
-        I.*,
-        U.nombre as cliente_nombre, U.apellidos as cliente_apellidos, U.dni as cliente_dni,
-        P.nombre_razon_social as promotor_nombre, P.dni_cif as promotor_cif,
-        INS.nombre_empresa as instalador_empresa, INS.cif_empresa as instalador_cif
-    FROM instalaciones I
-    LEFT JOIN clientes U ON I.cliente_id = U.id
-    LEFT JOIN promotores P ON I.promotor_id = P.id
-    LEFT JOIN instaladores INS ON I.instalador_id = INS.id
-    WHERE I.id = ? AND I.app_user_id = ?
+        SELECT 
+            i.*,
+            c.nombre as cliente_nombre, c.apellidos as cliente_apellidos,
+            p.nombre_razon_social as promotor_nombre,
+            inst.nombre_empresa as instalador_nombre,
+            dir_emp.nombre_via as direccion_emplazamiento_via,
+            ps.nombre_panel as panel_nombre,
+            inv.nombre_inversor as inversor_nombre,
+            b.nombre_bateria as bateria_nombre
+        FROM instalaciones i
+        JOIN clientes c ON i.cliente_id = c.id AND c.app_user_id = %s
+        LEFT JOIN promotores p ON i.promotor_id = p.id
+        LEFT JOIN instaladores inst ON i.instalador_id = inst.id
+        LEFT JOIN direcciones dir_emp ON i.direccion_emplazamiento_id = dir_emp.id
+        LEFT JOIN paneles_solares ps ON i.panel_solar_id = ps.id
+        LEFT JOIN inversores inv ON i.inversor_id = inv.id
+        LEFT JOIN baterias b ON i.bateria_id = b.id
+        WHERE i.id = %s
     """
-    return _execute_select(conn, sql, (instalacion_id, app_user_id), one=True)
+    return _execute_select(conn, sql, (app_user_id, instalacion_id), one=True)
 
-def update_instalacion(conn, instalacion_id, app_user_id, data_dict):
-    """Actualiza una instalación, verificando que pertenece al usuario."""
-    fields = [
-        'descripcion', 'cliente_id', 'promotor_id', 'instalador_id',
-        'direccion_emplazamiento', 'tipo_via', 'nombre_via', 'numero_via', 'piso_puerta',
-        'codigo_postal', 'localidad', 'provincia', 'referencia_catastral', 'tipo_finca',
-        'panel_solar', 'numero_paneles', 'inversor', 'numero_inversores', 'bateria',
-        'numero_baterias', 'distribuidora', 'cups', 'potencia_contratada_w',
-        'tipo_de_estructura', 'tipo_de_cubierta', 'material_cableado', 'longitud_cable_cc_string1',
-        'seccion_cable_ac_mm2', 'longitud_cable_ac_m', 'protector_sobretensiones',
-        'diferencial_a', 'sensibilidad_ma'
-    ]
-    fields_to_update = [f for f in fields if f in data_dict]
-    if not fields_to_update:
-        return False, "No se proporcionaron campos para actualizar."
-    values = [data_dict[f] for f in fields_to_update]
-    values.append(instalacion_id)
-    values.append(app_user_id)
-    set_clause = ', '.join([f"{field} = ?" for field in fields_to_update])
-    sql = f"UPDATE instalaciones SET {set_clause} WHERE id = ? AND app_user_id = ?"
-    return _execute_update_delete(conn, sql, tuple(values))
 
-def delete_instalacion(conn, instalacion_id, app_user_id):
-    """Elimina una instalación, verificando que pertenece al usuario."""
-    sql = "DELETE FROM instalaciones WHERE id = ? AND app_user_id = ?"
-    return _execute_update_delete(conn, sql, (instalacion_id, app_user_id))
-
-def get_all_from_table(conn, table_name, order_by_column="id", columns="*"):
-    # Lista de validación para seguridad
-    VALID_TABLES = ["inversores", "paneles_solares", "contadores", "baterias", "tipos_vias", "distribuidoras", "categorias_instalador", "clientes", "promotores", "instaladores", "tipos_finca"]
-    if table_name not in VALID_TABLES:
-        print(f"!!! INTENTO DE ACCESO A TABLA NO VÁLIDA: {table_name} !!!")
-        # Devolvemos una lista vacía para no romper el frontend
-        return []
-
-    # Usamos la función de ayuda _execute_select que ya maneja errores
-    # y devuelve [] en caso de fallo.
-    sql = f"SELECT {columns} FROM {table_name} ORDER BY {order_by_column}"
+# --- ESCRITURA ---
+def add_instalacion(conn, data):
+    """
+    Añade una nueva instalación. Asume que ya se han creado la dirección, cliente, etc.,
+    y que el frontend nos pasa sus IDs.
+    """
+    # También necesita su propia dirección de emplazamiento
+    direccion_data = data.get('direccion_emplazamiento', {})
     
-    # La llamada a _execute_select ya es segura.
-    # No necesitamos un try/except aquí.
-    return _execute_select(conn, sql)
+    try:
+        with conn:
+            with conn.cursor() as cursor:
+                # Paso 1: Crear la dirección de emplazamiento
+                sql_direccion = "INSERT INTO direcciones (...) VALUES (...) RETURNING id;"
+                cursor.execute(sql_direccion, (...))
+                direccion_emplazamiento_id = cursor.fetchone()['id']
+
+                # Paso 2: Crear la instalación con todos los IDs
+                sql_instalacion = """
+                    INSERT INTO instalaciones (
+                        cliente_id, promotor_id, instalador_id, direccion_emplazamiento_id,
+                        tipo_finca_id, panel_solar_id, inversor_id, bateria_id, distribuidora_id,
+                        ... otros campos ...
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, ...) RETURNING id;
+                """
+                params = (
+                    data.get('cliente_id'), data.get('promotor_id'), data.get('instalador_id'),
+                    direccion_emplazamiento_id, data.get('tipo_finca_id'), 
+                    data.get('panel_solar_id'), data.get('inversor_id'),
+                    data.get('bateria_id'), data.get('distribuidora_id'),
+                    # ... otros valores ...
+                )
+                cursor.execute(sql_instalacion, params)
+                instalacion_id = cursor.fetchone()['id']
+
+                # Paso 3 (Avanzado): Insertar los tramos de cableado
+                tramos_data = data.get('tramos_cableado', [])
+                if tramos_data:
+                    sql_tramos = "INSERT INTO tramos_cableado_instalacion (instalacion_id, tipo_cable_id, ...) VALUES (%s, %s, ...);"
+                    for tramo in tramos_data:
+                        cursor.execute(sql_tramos, (instalacion_id, tramo.get('tipo_cable_id'), ...))
+
+        return instalacion_id, "Instalación creada correctamente."
+    except Exception as e:
+        logging.error(f"Fallo en transacción de añadir instalación: {e}")
+        return None, f"Error en la base de datos: {e}"
+    
+def delete_instalacion(conn, instalacion_id, app_user_id):
+    """
+    Elimina una instalación, su dirección de emplazamiento y sus tramos de cableado
+    en una única transacción. La seguridad se verifica a través del cliente asociado.
+    """
+    try:
+        with conn: # Inicia la transacción
+            with conn.cursor() as cursor:
+                # Paso 1: Verificar la propiedad y obtener el ID de la dirección de emplazamiento
+                # Hacemos un JOIN con clientes para asegurarnos de que el usuario es el dueño.
+                sql_get_ids = """
+                    SELECT i.direccion_emplazamiento_id 
+                    FROM instalaciones i
+                    JOIN clientes c ON i.cliente_id = c.id
+                    WHERE i.id = %s AND c.app_user_id = %s;
+                """
+                cursor.execute(sql_get_ids, (instalacion_id, app_user_id))
+                result = cursor.fetchone()
+                if not result:
+                    raise ValueError("Instalación no encontrada o no autorizado para esta operación.")
+                
+                direccion_emplazamiento_id = result['direccion_emplazamiento_id']
+
+                # Paso 2: Eliminar los tramos de cableado asociados a la instalación
+                cursor.execute(
+                    "DELETE FROM tramos_cableado_instalacion WHERE instalacion_id = %s",
+                    (instalacion_id,)
+                )
+                
+                # Paso 3: Eliminar la instalación
+                cursor.execute("DELETE FROM instalaciones WHERE id = %s", (instalacion_id,))
+                
+                # Paso 4: Eliminar la dirección de emplazamiento asociada
+                if direccion_emplazamiento_id is not None:
+                    cursor.execute("DELETE FROM direcciones WHERE id = %s", (direccion_emplazamiento_id,))
+
+        logging.info(f"Instalación ID: {instalacion_id} y sus datos asociados eliminados correctamente.")
+        return True, "Instalación eliminada correctamente."
+
+    except Exception as e:
+        logging.error(f"Fallo en la transacción de eliminar instalación: {e}")
+        return False, f"Error al eliminar la instalación: {e}"
