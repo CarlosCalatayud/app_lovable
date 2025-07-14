@@ -4,20 +4,30 @@ import logging
 from .base_model import _execute_select
 
 # --- LECTURA ---
-def get_all_instalaciones(conn, app_user_id):
-    # Obtenemos solo un resumen para la lista principal
+def get_all_instalaciones(conn, app_user_id, ciudad=None): # CTO: Volvemos a añadir el parámetro opcional 'ciudad'
+    """Obtiene un resumen de las instalaciones de un usuario, con filtrado opcional por ciudad."""
+    
+    # Parámetros para la consulta SQL. Empezamos con el app_user_id.
+    params = [app_user_id]
+    
+    # La seguridad se basa en que la instalación DEBE pertenecer a un cliente del usuario.
+    # Además, hemos añadido app_user_id directamente a la tabla de instalaciones para doble seguridad.
     sql = """
         SELECT i.id, i.descripcion, d.localidad, d.provincia, i.fecha_creacion
         FROM instalaciones i
         JOIN clientes c ON i.cliente_id = c.id
         LEFT JOIN direcciones d ON i.direccion_emplazamiento_id = d.id
-        WHERE c.app_user_id = %s -- La seguridad se basa en el dueño del cliente
-        ORDER BY i.fecha_creacion DESC
+        WHERE c.app_user_id = %s
     """
-    # NOTA: La seguridad aquí es a través del app_user_id del cliente asociado a la instalación.
-    # Necesitas un app_user_id en la tabla de instalaciones también para una seguridad directa.
-    # Por ahora, asumimos que el JOIN con clientes es suficiente.
-    return _execute_select(conn, sql, (app_user_id,))
+
+    # Si se proporciona un filtro de ciudad, lo añadimos a la consulta y a los parámetros.
+    if ciudad:
+        sql += " AND lower(d.localidad) LIKE %s"
+        params.append(f"%{ciudad.lower()}%")
+
+    sql += " ORDER BY i.fecha_creacion DESC"
+    
+    return _execute_select(conn, sql, tuple(params))
 
 def get_instalacion_completa(conn, instalacion_id, app_user_id):
     # Esta es la consulta más grande. Une todas las piezas.
