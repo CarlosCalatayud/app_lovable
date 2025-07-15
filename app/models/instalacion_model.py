@@ -64,48 +64,71 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
 # --- ESCRITURA ---
 def add_instalacion(conn, data):
     """
-    Añade una nueva instalación. Asume que ya se han creado la dirección, cliente, etc.,
-    y que el frontend nos pasa sus IDs.
+    Añade una nueva instalación, su dirección y sus tramos de cableado en una única transacción.
     """
-    # También necesita su propia dirección de emplazamiento
     direccion_data = data.get('direccion_emplazamiento', {})
+    tramos_data = data.get('tramos_cableado', [])
     
     try:
+        # La transacción se maneja con 'with conn:'. Commit automático al final, rollback si hay error.
         with conn:
             with conn.cursor() as cursor:
-                # Paso 1: Crear la dirección de emplazamiento
-                sql_direccion = "INSERT INTO direcciones (...) VALUES (...) RETURNING id;"
-                cursor.execute(sql_direccion, (...))
+                # Paso 1: Crear la dirección de emplazamiento y obtener su ID.
+                sql_direccion = """
+                    INSERT INTO direcciones (alias, tipo_via_id, nombre_via, numero_via, piso_puerta, codigo_postal, localidad, provincia)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
+                """
+                cursor.execute(sql_direccion, (
+                    direccion_data.get('alias', 'Emplazamiento'), direccion_data.get('tipo_via_id'),
+                    direccion_data.get('nombre_via'), direccion_data.get('numero_via'),
+                    direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'),
+                    direccion_data.get('localidad'), direccion_data.get('provincia')
+                ))
                 direccion_emplazamiento_id = cursor.fetchone()['id']
 
-                # Paso 2: Crear la instalación con todos los IDs
+                # Paso 2: Crear la instalación con todos los IDs.
+                # CTO: Aquí listamos TODAS las columnas que esperamos del frontend.
                 sql_instalacion = """
                     INSERT INTO instalaciones (
-                        cliente_id, promotor_id, instalador_id, direccion_emplazamiento_id,
-                        tipo_finca_id, panel_solar_id, inversor_id, bateria_id, distribuidora_id,
-                        ... otros campos ...
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, ...) RETURNING id;
+                        cliente_id, promotor_id, instalador_id, direccion_emplazamiento_id, tipo_finca_id,
+                        panel_solar_id, inversor_id, bateria_id, distribuidora_id,
+                        app_user_id, descripcion, numero_paneles, numero_inversores, numero_baterias, cups,
+                        potencia_contratada_w, referencia_catastral, tipo_de_estructura, tipo_de_cubierta
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    ) RETURNING id;
                 """
-                params = (
+                params_instalacion = (
                     data.get('cliente_id'), data.get('promotor_id'), data.get('instalador_id'),
-                    direccion_emplazamiento_id, data.get('tipo_finca_id'), 
-                    data.get('panel_solar_id'), data.get('inversor_id'),
-                    data.get('bateria_id'), data.get('distribuidora_id'),
-                    # ... otros valores ...
+                    direccion_emplazamiento_id, data.get('tipo_finca_id'), data.get('panel_solar_id'),
+                    data.get('inversor_id'), data.get('bateria_id'), data.get('distribuidora_id'),
+                    data['app_user_id'], data.get('descripcion'), data.get('numero_paneles'),
+                    data.get('numero_inversores'), data.get('numero_baterias'), data.get('cups'),
+                    data.get('potencia_contratada_w'), data.get('referencia_catastral'),
+                    data.get('tipo_de_estructura'), data.get('tipo_de_cubierta')
                 )
-                cursor.execute(sql_instalacion, params)
+                cursor.execute(sql_instalacion, params_instalacion)
                 instalacion_id = cursor.fetchone()['id']
 
-                # Paso 3 (Avanzado): Insertar los tramos de cableado
-                tramos_data = data.get('tramos_cableado', [])
+                # Paso 3: Insertar los tramos de cableado en un bucle.
                 if tramos_data:
-                    sql_tramos = "INSERT INTO tramos_cableado_instalacion (instalacion_id, tipo_cable_id, ...) VALUES (%s, %s, ...);"
-                    for tramo in tramos_data:
-                        cursor.execute(sql_tramos, (instalacion_id, tramo.get('tipo_cable_id'), ...))
+                    sql_tramos = """
+                        INSERT INTO tramos_cableado_instalacion (
+                            instalacion_id, tipo_cable_id, material, longitud_m, seccion_mm2, descripcion
+                        ) VALUES (%s, %s, %s, %s, %s, %s);
+                    """
+                    # Creamos una lista de tuplas para una inserción más eficiente
+                    tramos_params = [
+                        (instalacion_id, tramo.get('tipo_cable_id'), tramo.get('material'), 
+                         tramo.get('longitud_m'), tramo.get('seccion_mm2'), tramo.get('descripcion'))
+                        for tramo in tramos_data
+                    ]
+                    cursor.executemany(sql_tramos, tramos_params)
 
+        logging.info(f"Instalación creada con éxito. ID: {instalacion_id}")
         return instalacion_id, "Instalación creada correctamente."
     except Exception as e:
-        logging.error(f"Fallo en transacción de añadir instalación: {e}")
+        logging.error(f"Fallo en transacción de añadir instalación (ROLLBACK automático): {e}")
         return None, f"Error en la base de datos: {e}"
     
 def delete_instalacion(conn, instalacion_id, app_user_id):
