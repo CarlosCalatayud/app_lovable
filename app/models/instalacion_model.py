@@ -7,17 +7,18 @@ from .base_model import _execute_select
 def get_all_instalaciones(conn, app_user_id, ciudad=None):
     """
     Obtiene un resumen de las instalaciones de un usuario, con filtrado opcional.
-    La consulta ahora usa columnas que existen en la nueva estructura de la BD.
+    Versión con la sintaxis SQL corregida.
     """
-    # CTO: Hemos eliminado 'i.descripcion' y 'i.fecha_creacion' que ya no existen.
-    # En su lugar, seleccionamos el alias de la dirección y el nombre del cliente,
-    # y ordenamos por el ID de la instalación (que es secuencial y similar a una fecha).
     sql = """
-        SELECT i.id, i.descripcion, d.localidad, d.provincia
+        SELECT 
+            i.id, 
+            i.descripcion,
+            d.localidad, 
+            d.provincia
         FROM instalaciones i
         JOIN clientes c ON i.cliente_id = c.id
         LEFT JOIN direcciones d ON i.direccion_emplazamiento_id = d.id
-        WHERE c.app_user_id = %s ORDER BY i.id DESC
+        WHERE c.app_user_id = %s
     """
     
     params = [app_user_id]
@@ -26,7 +27,7 @@ def get_all_instalaciones(conn, app_user_id, ciudad=None):
         sql += " AND lower(d.localidad) LIKE %s"
         params.append(f"%{ciudad.lower()}%")
 
-    # CTO: Ordenamos por ID descendente para ver las más nuevas primero.
+    # CTO: CORRECCIÓN - Solo hay UNA cláusula ORDER BY al final.
     sql += " ORDER BY i.id DESC"
     
     return _execute_select(conn, sql, tuple(params))
