@@ -33,28 +33,76 @@ def get_all_instalaciones(conn, app_user_id, ciudad=None):
     return _execute_select(conn, sql, tuple(params))
 
 def get_instalacion_completa(conn, instalacion_id, app_user_id):
-    # Esta es la consulta más grande. Une todas las piezas.
-    sql = """
+    """
+    Obtiene TODOS los datos de una instalación específica para rellenar un formulario de edición.
+    Esto incluye datos de la instalación, su dirección de emplazamiento completa y sus tramos de cableado.
+    La seguridad se garantiza comprobando que la instalación pertenece al app_user_id.
+    """
+    
+    # CTO: Consulta Principal. Ahora une todas las tablas necesarias y extrae
+    # todos los campos de la dirección de emplazamiento, usando alias para evitar conflictos de nombres.
+    sql_principal = """
         SELECT 
             i.*,
-            c.nombre as cliente_nombre, c.apellidos as cliente_apellidos,
-            p.nombre_razon_social as promotor_nombre,
-            inst.nombre_empresa as instalador_nombre,
-            dir_emp.nombre_via as direccion_emplazamiento_via,
-            ps.nombre_panel as panel_nombre,
-            inv.nombre_inversor as inversor_nombre,
-            b.nombre_bateria as bateria_nombre
+            -- Datos del Cliente
+            c.nombre AS cliente_nombre, c.apellidos AS cliente_apellidos, c.dni AS cliente_dni,
+            -- Datos del Promotor
+            p.nombre_razon_social AS promotor_nombre, p.dni_cif AS promotor_cif,
+            -- Datos del Instalador
+            inst.nombre_empresa AS instalador_empresa, inst.cif_empresa AS instalador_cif,
+            -- CTO: Datos COMPLETOS de la dirección de emplazamiento con alias
+            dir_emp.alias AS emplazamiento_alias,
+            dir_emp.tipo_via_id AS emplazamiento_tipo_via_id,
+            dir_emp.nombre_via AS emplazamiento_nombre_via,
+            dir_emp.numero_via AS emplazamiento_numero_via,
+            dir_emp.piso_puerta AS emplazamiento_piso_puerta,
+            dir_emp.codigo_postal AS emplazamiento_codigo_postal,
+            dir_emp.localidad AS emplazamiento_localidad,
+            dir_emp.provincia AS emplazamiento_provincia,
+            -- Nombres de entidades de catálogo para visualización
+            ps.nombre_panel AS panel_solar_nombre,
+            inv.nombre_inversor AS inversor_nombre,
+            b.nombre_bateria AS bateria_nombre,
+            d.nombre_distribuidora AS distribuidora_nombre,
+            tf.nombre AS tipo_finca_nombre
         FROM instalaciones i
-        JOIN clientes c ON i.cliente_id = c.id AND c.app_user_id = %s
+        -- CTO: El JOIN con clientes es CLAVE para la seguridad multi-tenant.
+        JOIN clientes c ON i.cliente_id = c.id
+        -- CTO: Usamos LEFT JOIN para las demás entidades, ya que pueden ser opcionales.
         LEFT JOIN promotores p ON i.promotor_id = p.id
         LEFT JOIN instaladores inst ON i.instalador_id = inst.id
         LEFT JOIN direcciones dir_emp ON i.direccion_emplazamiento_id = dir_emp.id
         LEFT JOIN paneles_solares ps ON i.panel_solar_id = ps.id
         LEFT JOIN inversores inv ON i.inversor_id = inv.id
         LEFT JOIN baterias b ON i.bateria_id = b.id
-        WHERE i.id = %s
+        LEFT JOIN distribuidoras d ON i.distribuidora_id = d.id
+        LEFT JOIN tipos_finca tf ON i.tipo_finca_id = tf.id
+        WHERE 
+            i.id = %s AND i.app_user_id = %s;
     """
-    return _execute_select(conn, sql, (app_user_id, instalacion_id), one=True)
+    
+    # CTO: _execute_select ya maneja el cursor y devuelve un diccionario, lo cual es perfecto.
+    instalacion_data = _execute_select(conn, sql_principal, (instalacion_id, app_user_id), one=True)
+    
+    # Si la instalación no se encuentra o no pertenece al usuario, devolvemos None inmediatamente.
+    if not instalacion_data:
+        return None
+
+    # CTO: Consulta Secundaria para la relación uno-a-muchos (tramos de cableado)
+    # Este enfoque de dos pasos es más limpio que un JOIN que duplicaría los datos de la instalación.
+    sql_tramos = """
+        SELECT * 
+        FROM tramos_cableado_instalacion 
+        WHERE instalacion_id = %s 
+        ORDER BY id ASC;
+    """
+    tramos_data = _execute_select(conn, sql_tramos, (instalacion_id,))
+    
+    # CTO: Combinamos los resultados en un único objeto.
+    # El frontend recibirá un JSON con un objeto principal y un array anidado para los tramos.
+    instalacion_data['tramos_cableado'] = tramos_data
+    
+    return instalacion_data
 
 
 # --- ESCRITURA ---
