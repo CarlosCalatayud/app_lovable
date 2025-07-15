@@ -39,8 +39,7 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
     La seguridad se garantiza comprobando que la instalación pertenece al app_user_id.
     """
     
-    # CTO: Consulta Principal. Ahora une todas las tablas necesarias y extrae
-    # todos los campos de la dirección de emplazamiento, usando alias para evitar conflictos de nombres.
+    # CTO: Consulta Principal. Corregida para coincidir con el esquema real de la BD.
     sql_principal = """
         SELECT 
             i.*,
@@ -50,7 +49,7 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             p.nombre_razon_social AS promotor_nombre, p.dni_cif AS promotor_cif,
             -- Datos del Instalador
             inst.nombre_empresa AS instalador_empresa, inst.cif_empresa AS instalador_cif,
-            -- CTO: Datos COMPLETOS de la dirección de emplazamiento con alias
+            -- Datos COMPLETOS de la dirección de emplazamiento con alias
             dir_emp.alias AS emplazamiento_alias,
             dir_emp.tipo_via_id AS emplazamiento_tipo_via_id,
             dir_emp.nombre_via AS emplazamiento_nombre_via,
@@ -59,16 +58,18 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             dir_emp.codigo_postal AS emplazamiento_codigo_postal,
             dir_emp.localidad AS emplazamiento_localidad,
             dir_emp.provincia AS emplazamiento_provincia,
-            -- Nombres de entidades de catálogo para visualización
+            -- Nombres de entidades de catálogo para visualización (CORREGIDOS)
             ps.nombre_panel AS panel_solar_nombre,
             inv.nombre_inversor AS inversor_nombre,
             b.nombre_bateria AS bateria_nombre,
             d.nombre_distribuidora AS distribuidora_nombre,
-            tf.nombre AS tipo_finca_nombre
+            -- CTO: CORRECCIÓN CLAVE AQUÍ -> de 'tf.nombre' a 'tf.nombre_tipo_finca'
+            tf.nombre_tipo_finca AS tipo_finca_nombre,
+            tes.nombre_tipo_estructura AS tipo_estructura_nombre
         FROM instalaciones i
-        -- CTO: El JOIN con clientes es CLAVE para la seguridad multi-tenant.
+        -- El JOIN con clientes es CLAVE para la seguridad multi-tenant.
+        -- Se comprueba tanto el i.id como el i.app_user_id para doble seguridad.
         JOIN clientes c ON i.cliente_id = c.id
-        -- CTO: Usamos LEFT JOIN para las demás entidades, ya que pueden ser opcionales.
         LEFT JOIN promotores p ON i.promotor_id = p.id
         LEFT JOIN instaladores inst ON i.instalador_id = inst.id
         LEFT JOIN direcciones dir_emp ON i.direccion_emplazamiento_id = dir_emp.id
@@ -76,20 +77,20 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
         LEFT JOIN inversores inv ON i.inversor_id = inv.id
         LEFT JOIN baterias b ON i.bateria_id = b.id
         LEFT JOIN distribuidoras d ON i.distribuidora_id = d.id
+        -- CTO: CORRECCIÓN -> La tabla es tipos_finca
         LEFT JOIN tipos_finca tf ON i.tipo_finca_id = tf.id
+        -- CTO: AJUSTE PROACTIVO -> Añadimos la tabla de tipo_estructura
+        LEFT JOIN tipos_estructura tes ON i.tipo_estructura_id = tes.id
         WHERE 
             i.id = %s AND i.app_user_id = %s;
     """
     
-    # CTO: _execute_select ya maneja el cursor y devuelve un diccionario, lo cual es perfecto.
     instalacion_data = _execute_select(conn, sql_principal, (instalacion_id, app_user_id), one=True)
     
-    # Si la instalación no se encuentra o no pertenece al usuario, devolvemos None inmediatamente.
     if not instalacion_data:
         return None
 
-    # CTO: Consulta Secundaria para la relación uno-a-muchos (tramos de cableado)
-    # Este enfoque de dos pasos es más limpio que un JOIN que duplicaría los datos de la instalación.
+    # Consulta Secundaria para los tramos de cableado (esta ya era correcta)
     sql_tramos = """
         SELECT * 
         FROM tramos_cableado_instalacion 
@@ -98,8 +99,7 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
     """
     tramos_data = _execute_select(conn, sql_tramos, (instalacion_id,))
     
-    # CTO: Combinamos los resultados en un único objeto.
-    # El frontend recibirá un JSON con un objeto principal y un array anidado para los tramos.
+    # Combinamos los resultados en un único objeto.
     instalacion_data['tramos_cableado'] = tramos_data
     
     return instalacion_data
