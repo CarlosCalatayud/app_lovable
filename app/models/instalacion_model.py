@@ -201,3 +201,88 @@ def delete_instalacion(conn, instalacion_id, app_user_id):
     except Exception as e:
         logging.error(f"Fallo en la transacción de eliminar instalación: {e}")
         return False, f"Error al eliminar la instalación: {e}"
+    
+
+def update_instalacion(conn, instalacion_id, app_user_id, data):
+    """
+    Actualiza una instalación existente y sus datos relacionados (dirección, tramos)
+    de forma transaccional.
+    """
+    direccion_data = data.get('direccion_emplazamiento', {})
+    tramos_data = data.get('tramos_cableado', [])
+
+    try:
+        with conn:  # Inicia transacción
+            with conn.cursor() as cursor:
+                # CTO: Paso 1 - Seguridad y obtener IDs.
+                # Verificamos que la instalación pertenece al usuario y obtenemos el ID de su dirección.
+                cursor.execute(
+                    "SELECT direccion_emplazamiento_id FROM instalaciones WHERE id = %s AND app_user_id = %s",
+                    (instalacion_id, app_user_id)
+                )
+                instalacion_actual = cursor.fetchone()
+                if not instalacion_actual:
+                    # Si no se encuentra, no pertenece al usuario. No damos más información.
+                    raise ValueError("Instalación no encontrada o acceso no autorizado.")
+                
+                direccion_emplazamiento_id = instalacion_actual['direccion_emplazamiento_id']
+
+                # CTO: Paso 2 - Actualizar la tabla de direcciones.
+                # Solo si se han proporcionado datos de dirección en el JSON.
+                if direccion_data and direccion_emplazamiento_id:
+                    sql_update_direccion = """
+                        UPDATE direcciones SET
+                            tipo_via_id = %(tipo_via_id)s, nombre_via = %(nombre_via)s, numero_via = %(numero_via)s,
+                            piso_puerta = %(piso_puerta)s, codigo_postal = %(codigo_postal)s,
+                            localidad = %(localidad)s, provincia = %(provincia)s
+                        WHERE id = %(id)s;
+                    """
+                    # Añadimos el ID al diccionario de datos para el WHERE
+                    direccion_data['id'] = direccion_emplazamiento_id 
+                    cursor.execute(sql_update_direccion, direccion_data)
+
+                # CTO: Paso 3 - Actualizar la tabla de instalaciones.
+                # Construimos la consulta dinámicamente para ser más flexibles.
+                sql_update_instalacion = """
+                    UPDATE instalaciones SET
+                        cliente_id = %(cliente_id)s, promotor_id = %(promotor_id)s, instalador_id = %(instalador_id)s,
+                        tipo_finca_id = %(tipo_finca_id)s, panel_solar_id = %(panel_solar_id)s, inversor_id = %(inversor_id)s,
+                        bateria_id = %(bateria_id)s, distribuidora_id = %(distribuidora_id)s, descripcion = %(descripcion)s,
+                        numero_paneles = %(numero_paneles)s, numero_inversores = %(numero_inversores)s,
+                        numero_baterias = %(numero_baterias)s, cups = %(cups)s, potencia_contratada_w = %(potencia_contratada_w)s,
+                        referencia_catastral = %(referencia_catastral)s, tipo_de_cubierta = %(tipo_de_cubierta)s,
+                        protector_sobretensiones = %(protector_sobretensiones)s, diferencial_a = %(diferencial_a)s,
+                        sensibilidad_ma = %(sensibilidad_ma)s, tipo_estructura_id = %(tipo_estructura_id)s
+                    WHERE id = %(id)s AND app_user_id = %(app_user_id)s;
+                """
+                # Añadimos los IDs necesarios para el WHERE
+                data['id'] = instalacion_id
+                data['app_user_id'] = app_user_id
+                cursor.execute(sql_update_instalacion, data)
+
+                # CTO: Paso 4 - Actualizar tramos de cableado.
+                # El enfoque más simple y robusto: borrar los viejos e insertar los nuevos.
+                cursor.execute("DELETE FROM tramos_cableado_instalacion WHERE instalacion_id = %s", (instalacion_id,))
+                if tramos_data:
+                    sql_insert_tramos = """
+                        INSERT INTO tramos_cableado_instalacion 
+                            (instalacion_id, tipo_cable_id, material, longitud_m, seccion_mm2, descripcion)
+                        VALUES (%(instalacion_id)s, %(tipo_cable_id)s, %(material)s, %(longitud_m)s, %(seccion_mm2)s, %(descripcion)s);
+                    """
+                    # Añadimos el instalacion_id a cada tramo antes de insertar
+                    for tramo in tramos_data:
+                        tramo['instalacion_id'] = instalacion_id
+                    cursor.executemany(sql_insert_tramos, tramos_data)
+
+        # Si todo ha ido bien, la transacción se confirma al salir del 'with conn'.
+        return True, "Instalación actualizada correctamente."
+
+    except ValueError as ve:
+        # Error de autorización o ID no encontrado
+        logging.warning(f"Error de validación al actualizar instalación {instalacion_id}: {ve}")
+        return False, str(ve)
+    except Exception as e:
+        # Cualquier otro error de base de datos
+        logging.error(f"Fallo en transacción de actualizar instalación {instalacion_id}: {e}", exc_info=True)
+        return False, f"Error en la base de datos: {e}"
+
