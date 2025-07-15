@@ -4,19 +4,21 @@ import logging
 from .base_model import _execute_select
 
 # --- LECTURA ---
-def get_all_instalaciones(conn, app_user_id, ciudad=None): # CTO: Volvemos a añadir el parámetro opcional 'ciudad'
+def get_all_instalaciones(conn, app_user_id, ciudad=None):
     """
-    Obtiene un resumen de las instalaciones de un usuario, con filtrado opcional por ciudad.
-    La seguridad se basa en que la instalación DEBE pertenecer a un cliente del usuario.
+    Obtiene un resumen de las instalaciones de un usuario, con filtrado opcional.
+    La consulta ahora usa columnas que existen en la nueva estructura de la BD.
     """
-    # La consulta base une las tablas necesarias.
+    # CTO: Hemos eliminado 'i.descripcion' y 'i.fecha_creacion' que ya no existen.
+    # En su lugar, seleccionamos el alias de la dirección y el nombre del cliente,
+    # y ordenamos por el ID de la instalación (que es secuencial y similar a una fecha).
     sql = """
         SELECT 
             i.id, 
-            c.nombre || ' ' || c.apellidos as nombre_cliente, -- Un nombre completo para mostrar
+            c.nombre || ' ' || c.apellidos as nombre_cliente,
+            d.alias as direccion_alias,
             d.localidad, 
-            d.provincia, 
-            i.fecha_creacion
+            d.provincia
         FROM instalaciones i
         JOIN clientes c ON i.cliente_id = c.id
         LEFT JOIN direcciones d ON i.direccion_emplazamiento_id = d.id
@@ -25,12 +27,12 @@ def get_all_instalaciones(conn, app_user_id, ciudad=None): # CTO: Volvemos a añ
     
     params = [app_user_id]
 
-    # Si se proporciona un filtro de ciudad, lo añadimos dinámicamente.
     if ciudad:
         sql += " AND lower(d.localidad) LIKE %s"
         params.append(f"%{ciudad.lower()}%")
 
-    sql += " ORDER BY i.fecha_creacion DESC"
+    # CTO: Ordenamos por ID descendente para ver las más nuevas primero.
+    sql += " ORDER BY i.id DESC"
     
     return _execute_select(conn, sql, tuple(params))
 
