@@ -5,22 +5,27 @@ from .base_model import _execute_select
 
 # --- LECTURA ---
 def get_all_instalaciones(conn, app_user_id, ciudad=None): # CTO: Volvemos a añadir el parámetro opcional 'ciudad'
-    """Obtiene un resumen de las instalaciones de un usuario, con filtrado opcional por ciudad."""
-    
-    # Parámetros para la consulta SQL. Empezamos con el app_user_id.
-    params = [app_user_id]
-    
-    # La seguridad se basa en que la instalación DEBE pertenecer a un cliente del usuario.
-    # Además, hemos añadido app_user_id directamente a la tabla de instalaciones para doble seguridad.
+    """
+    Obtiene un resumen de las instalaciones de un usuario, con filtrado opcional por ciudad.
+    La seguridad se basa en que la instalación DEBE pertenecer a un cliente del usuario.
+    """
+    # La consulta base une las tablas necesarias.
     sql = """
-        SELECT i.id, i.descripcion, d.localidad, d.provincia, i.fecha_creacion
+        SELECT 
+            i.id, 
+            c.nombre || ' ' || c.apellidos as nombre_cliente, -- Un nombre completo para mostrar
+            d.localidad, 
+            d.provincia, 
+            i.fecha_creacion
         FROM instalaciones i
         JOIN clientes c ON i.cliente_id = c.id
         LEFT JOIN direcciones d ON i.direccion_emplazamiento_id = d.id
         WHERE c.app_user_id = %s
     """
+    
+    params = [app_user_id]
 
-    # Si se proporciona un filtro de ciudad, lo añadimos a la consulta y a los parámetros.
+    # Si se proporciona un filtro de ciudad, lo añadimos dinámicamente.
     if ciudad:
         sql += " AND lower(d.localidad) LIKE %s"
         params.append(f"%{ciudad.lower()}%")
