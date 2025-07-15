@@ -195,20 +195,25 @@ def get_instalacion_detalle(conn, instalacion_id):
 def create_instalacion(conn):
     data = request.json
     
-    # CTO: Validación de entrada robusta
-    # Verificamos que los IDs de las entidades principales existen
-    required_ids = ['cliente_id', 'promotor_id', 'instalador_id', 'panel_solar_id', 'inversor_id']
-    if not all(field in data for field in required_ids):
-        return jsonify({'error': 'Faltan IDs de entidades obligatorias (cliente, promotor, instalador, panel, inversor).'}), 400
+    # CTO: Validación de entrada más robusta y específica para IDs.
+    required_ids = [
+        'cliente_id', 'promotor_id', 'instalador_id', 
+        'panel_solar_id', 'inversor_id', 'bateria_id',
+        'distribuidora_id', 'tipo_finca_id'
+    ]
+    missing_fields = [field for field in required_ids if data.get(field) is None]
+    if missing_fields:
+        return jsonify({'error': f"Faltan los siguientes IDs de entidades obligatorias: {', '.join(missing_fields)}"}), 400
 
-    # Verificamos que la dirección de emplazamiento tiene datos mínimos
-    if 'direccion_emplazamiento' not in data or not all(k in data['direccion_emplazamiento'] for k in ['nombre_via', 'localidad', 'provincia']):
+    if 'direccion_emplazamiento' not in data:
         return jsonify({'error': 'Faltan datos en la dirección de emplazamiento.'}), 400
 
-    
+    # CTO: Añadimos el app_user_id a la instalación para seguridad directa.
+    # Asegúrate de que la tabla 'instalaciones' tiene una columna 'app_user_id'.
     data['app_user_id'] = g.user_id
-
-    instalacion_id, message = instalacion_model.add_instalacion(conn, data, g.user_id) # Pasamos el app_user_id
+    
+    # La llamada al modelo ahora es correcta.
+    instalacion_id, message = instalacion_model.add_instalacion(conn, data)
     
     if instalacion_id:
         return jsonify({'id': instalacion_id, 'message': message}), 201
