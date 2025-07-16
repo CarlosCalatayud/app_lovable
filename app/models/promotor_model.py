@@ -35,7 +35,20 @@ def add_promotor(conn, data):
                 cursor.execute(sql_direccion, (direccion_data.get('alias', 'Dirección Fiscal'), direccion_data.get('tipo_via_id'), direccion_data.get('nombre_via'), direccion_data.get('numero_via'), direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'), direccion_data.get('localidad'), direccion_data.get('provincia')))
                 direccion_id = cursor.fetchone()['id']
                 
-                sql_promotor = "INSERT INTO promotores (app_user_id, nombre_razon_social, dni_cif, direccion_fiscal_id, email, telefono_contacto) VALUES (%s, %s, %s, %s) RETURNING id;"
+                sql_promotor = """
+                    INSERT INTO promotores (
+                        app_user_id, nombre_razon_social, dni_cif, direccion_fiscal_id, email, telefono_contacto
+                    ) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;
+                """
+                params = (
+                    data['app_user_id'],
+                    data.get('nombre_razon_social'),
+                    data.get('dni_cif'),
+                    direccion_id,
+                    data.get('email'), # <-- Este faltaba
+                    data.get('telefono_contacto') # <-- Y este también
+                )
+
                 cursor.execute(sql_promotor, (data['app_user_id'], data.get('nombre_razon_social'), data.get('dni_cif'), direccion_id))
                 promotor_id = cursor.fetchone()['id']
         logging.info(f"Promotor creado ID: {promotor_id}, Dirección ID: {direccion_id}")
