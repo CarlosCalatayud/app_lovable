@@ -49,7 +49,7 @@ def add_promotor(conn, data):
                     data.get('telefono_contacto') # <-- Y este también
                 )
 
-                cursor.execute(sql_promotor, (data['app_user_id'], data.get('nombre_razon_social'), data.get('dni_cif'), direccion_id))
+                cursor.execute(sql_promotor, params)
                 promotor_id = cursor.fetchone()['id']
         logging.info(f"Promotor creado ID: {promotor_id}, Dirección ID: {direccion_id}")
         return promotor_id, "Promotor creado correctamente."
