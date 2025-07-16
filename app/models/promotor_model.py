@@ -15,7 +15,7 @@ def get_all_promotores(conn, app_user_id):
 def get_promotor_by_id(conn, promotor_id, app_user_id):
     sql = """
         SELECT 
-            p.id, p.nombre_razon_social, p.dni_cif,
+            p.id, p.nombre_razon_social, p.dni_cif, p.email, p.telefono_contacto,
             d.id as direccion_id, d.alias, d.tipo_via_id, tv.nombre_tipo_via,
             d.nombre_via, d.numero_via, d.piso_puerta, d.codigo_postal,
             d.localidad, d.provincia
@@ -35,7 +35,7 @@ def add_promotor(conn, data):
                 cursor.execute(sql_direccion, (direccion_data.get('alias', 'Dirección Fiscal'), direccion_data.get('tipo_via_id'), direccion_data.get('nombre_via'), direccion_data.get('numero_via'), direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'), direccion_data.get('localidad'), direccion_data.get('provincia')))
                 direccion_id = cursor.fetchone()['id']
                 
-                sql_promotor = "INSERT INTO promotores (app_user_id, nombre_razon_social, dni_cif, direccion_fiscal_id) VALUES (%s, %s, %s, %s) RETURNING id;"
+                sql_promotor = "INSERT INTO promotores (app_user_id, nombre_razon_social, dni_cif, direccion_fiscal_id, email, telefono_contacto) VALUES (%s, %s, %s, %s) RETURNING id;"
                 cursor.execute(sql_promotor, (data['app_user_id'], data.get('nombre_razon_social'), data.get('dni_cif'), direccion_id))
                 promotor_id = cursor.fetchone()['id']
         logging.info(f"Promotor creado ID: {promotor_id}, Dirección ID: {direccion_id}")
@@ -58,7 +58,7 @@ def update_promotor(conn, promotor_id, app_user_id, data):
                     sql_update_direccion = "UPDATE direcciones SET alias = %s, tipo_via_id = %s, nombre_via = %s, numero_via = %s, piso_puerta = %s, codigo_postal = %s, localidad = %s, provincia = %s WHERE id = %s;"
                     cursor.execute(sql_update_direccion, (direccion_data.get('alias'), direccion_data.get('tipo_via_id'), direccion_data.get('nombre_via'), direccion_data.get('numero_via'), direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'), direccion_data.get('localidad'), direccion_data.get('provincia'), direccion_id))
                 
-                sql_update_promotor = "UPDATE promotores SET nombre_razon_social = %s, dni_cif = %s WHERE id = %s;"
+                sql_update_promotor = "UPDATE promotores SET nombre_razon_social = %s, dni_cif = %s , email = %s, telefono_contacto = %s WHERE id = %s;"
                 cursor.execute(sql_update_promotor, (data.get('nombre_razon_social'), data.get('dni_cif'), promotor_id))
         logging.info(f"Promotor ID: {promotor_id} actualizado.")
         return True, "Promotor actualizado correctamente."

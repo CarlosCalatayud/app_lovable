@@ -16,10 +16,10 @@ def get_all_clientes(conn, app_user_id):
     return _execute_select(conn, sql, (app_user_id,))
 
 def get_cliente_by_id(conn, cliente_id, app_user_id):
-    """Obtiene los detalles completos de un cliente, incluyendo su dirección."""
+    """Obtiene los detalles completos de un cliente, incluyendo su dirección y datos de contacto."""
     sql = """
-        SELECT 
-            c.id, c.nombre, c.apellidos, c.dni,
+        SELECT
+            c.id, c.nombre, c.apellidos, c.dni, c.email, c.telefono_contacto,
             d.id as direccion_id, d.alias, d.tipo_via_id, tv.nombre_tipo_via,
             d.nombre_via, d.numero_via, d.piso_puerta, d.codigo_postal,
             d.localidad, d.provincia
@@ -30,36 +30,30 @@ def get_cliente_by_id(conn, cliente_id, app_user_id):
     """
     return _execute_select(conn, sql, (cliente_id, app_user_id), one=True)
 
-# --- ESCRITURA (ahora es una transacción) ---
+# REEMPLAZAR add_cliente
 def add_cliente(conn, data):
     direccion_data = data.get('direccion', {})
     try:
-        # CTO: LA CORRECCIÓN CLAVE. `with conn:` inicia una transacción y
-        # hace COMMIT automáticamente si el bloque termina sin errores,
-        # o ROLLBACK si ocurre una excepción.
         with conn:
             with conn.cursor() as cursor:
-                # Paso 1: Crear la dirección
                 sql_direccion = "INSERT INTO direcciones (alias, tipo_via_id, nombre_via, numero_via, piso_puerta, codigo_postal, localidad, provincia) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;"
                 cursor.execute(sql_direccion, (direccion_data.get('alias', 'Dirección Principal'), direccion_data.get('tipo_via_id'), direccion_data.get('nombre_via'), direccion_data.get('numero_via'), direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'), direccion_data.get('localidad'), direccion_data.get('provincia')))
                 direccion_id = cursor.fetchone()['id']
                 
-                # Paso 2: Crear el cliente
-                sql_cliente = "INSERT INTO clientes (app_user_id, nombre, apellidos, dni, direccion_id) VALUES (%s, %s, %s, %s, %s) RETURNING id;"
-                cursor.execute(sql_cliente, (data['app_user_id'], data.get('nombre'), data.get('apellidos'), data.get('dni'), direccion_id))
+                sql_cliente = "INSERT INTO clientes (app_user_id, nombre, apellidos, dni, direccion_id, email, telefono_contacto) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;"
+                cursor.execute(sql_cliente, (data['app_user_id'], data.get('nombre'), data.get('apellidos'), data.get('dni'), direccion_id, data.get('email'), data.get('telefono_contacto')))
                 cliente_id = cursor.fetchone()['id']
-
-        logging.info(f"Éxito transaccional y COMMIT realizado. Cliente ID: {cliente_id}")
+        logging.info(f"Éxito transaccional. Cliente ID: {cliente_id}")
         return cliente_id, "Cliente creado correctamente."
     except Exception as e:
-        # El rollback es automático gracias a 'with conn:'.
-        logging.error(f"Fallo en transacción de añadir cliente (ROLLBACK automático): {e}")
+        logging.error(f"Fallo en transacción de añadir cliente: {e}")
         return None, f"Error en la base de datos: {e}"
 
+# REEMPLAZAR update_cliente
 def update_cliente(conn, cliente_id, app_user_id, data):
     direccion_data = data.get('direccion', {})
     try:
-        with conn: # Usamos la misma estructura transaccional
+        with conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT direccion_id FROM clientes WHERE id = %s AND app_user_id = %s", (cliente_id, app_user_id))
                 result = cursor.fetchone()
@@ -67,15 +61,16 @@ def update_cliente(conn, cliente_id, app_user_id, data):
                 
                 direccion_id = result['direccion_id']
                 if direccion_data and direccion_id is not None:
+                    # ... (la lógica de update_direccion sigue igual)
                     sql_update_direccion = "UPDATE direcciones SET alias = %s, tipo_via_id = %s, nombre_via = %s, numero_via = %s, piso_puerta = %s, codigo_postal = %s, localidad = %s, provincia = %s WHERE id = %s;"
                     cursor.execute(sql_update_direccion, (direccion_data.get('alias'), direccion_data.get('tipo_via_id'), direccion_data.get('nombre_via'), direccion_data.get('numero_via'), direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'), direccion_data.get('localidad'), direccion_data.get('provincia'), direccion_id))
                 
-                sql_update_cliente = "UPDATE clientes SET nombre = %s, apellidos = %s, dni = %s WHERE id = %s;"
-                cursor.execute(sql_update_cliente, (data.get('nombre'), data.get('apellidos'), data.get('dni'), cliente_id))
-        logging.info(f"Cliente ID: {cliente_id} actualizado y COMMIT realizado.")
+                sql_update_cliente = "UPDATE clientes SET nombre = %s, apellidos = %s, dni = %s, email = %s, telefono_contacto = %s WHERE id = %s;"
+                cursor.execute(sql_update_cliente, (data.get('nombre'), data.get('apellidos'), data.get('dni'), data.get('email'), data.get('telefono_contacto'), cliente_id))
+        logging.info(f"Cliente ID: {cliente_id} actualizado.")
         return True, "Cliente actualizado correctamente."
     except Exception as e:
-        logging.error(f"Fallo en transacción de actualizar cliente (ROLLBACK automático): {e}")
+        logging.error(f"Fallo en transacción de actualizar cliente: {e}")
         return False, f"Error al actualizar el cliente: {e}"
 
 def delete_cliente(conn, cliente_id, app_user_id):

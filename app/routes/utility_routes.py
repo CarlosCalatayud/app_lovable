@@ -11,13 +11,29 @@ bp = Blueprint('utility', __name__)
 # --- DATOS DE EJEMPLO PARA POBLAR LOS CATÁLOGOS ---
 # CTO: Hemos movido la lógica de datos aquí para que sea más fácil de gestionar.
 CATALOG_DATA = {
-    'tipos_vias': [('Calle',), ('Avenida',), ('Plaza',), ('Paseo',), ('Carretera',)],
+    'tipos_vias': [('ACCESO',), ('ACUEDUCTO',), ('AERODROMO',), ('AEROPUERTO',), ('ALAMEDA',), ('ALMACEN',),
+                   ('ALTO',), ('APARTAMENTO',), ('ARROYO',), ('AUTOVIA',), ('AVENIDA',), ('BAJADA',),
+                   ('BARRANCO',), ('BARRIADA',), ('BARRIO',), ('BASILICA',), ('BLOQUE',), ('BULEVAR',),
+                   ('CALLE',), ('CALLEJA',), ('CALLEJON',), ('CAMINO',), ('CAMPAMENTO',), ('CANAL',),
+                   ('CANTON',), ('CAÑADA',), ('CARRERA',), ('CARRETERA',), ('CARRIL',), ('CERRO',),
+                   ('COLONIA',), ('COSTANILLA',), ('CUESTA',), ('DEHESA',), ('FINCA',), ('GLORIETA',),
+                   ('GRAN VIA',), ('PARAJE',), ('PARCELA',), ('PARQUE',), ('PASADIZO',), ('PASAJE',),
+                   ('PASEO',), ('PLAZA',), ('PLAZUELA',), ('POBLADO',), ('POLIGONO',), ('RINCON',),
+                   ('RINCONADA',), ('RONDA',), ('ROTONDA',), ('SECTOR',), ('SENDA',), ('TRASERA',),
+                   ('TRAVESIA',), ('URBANIZACION',), ('VEREDA',), ('VIA',)],
     'tipos_finca': [('Vivienda unifamiliar',), ('Vivienda adosada',), ('Edificio residencial',), ('Nave industrial',)],
     'categorias_instalador': [('Básica',), ('Especialista',)],
     'tipos_cable': [('Cable de CC',), ('Cable de CA',), ('Puesta a Tierra',)],
+    'tipos_instalacion': [('coplanar',), ('triangular',), ('solarbloc',)],
+    'tipos_cubierta': [('cubierta con inclinación',), ('cubierta plana',), ('suelo',)],
     'distribuidoras': [
         ('0021', 'I-DE REDES ELÉCTRICAS INTELIGENTES'),
-        ('0022', 'UFD DISTRIBUCIÓN ELECTRICIDAD')
+        ('0022', 'UFD DISTRIBUCIÓN ELECTRICIDAD'),
+        ('0026', 'HIDROCANTÁBRICO DISTRIBUCIÓN ELÉCTRICA'),
+        ('0483', 'DISTRIBUCIÓN ELÉCTRICA DEL TAJUÑA'),
+        ('0494', 'DISTRIBUCIÓN ELÉCTRICA EL POZO DEL TIO RAIMUNDO, S.L.U'),
+        ('0314', 'HIDROELÉCTRICA VEGA, S.A.'),
+        (None, 'ES UNA INSTALACIÓN AISLADA') # Usamos NULL para el código
     ],
     'paneles_solares': [
         ('Panel Genérico 450W', 450),
@@ -58,10 +74,12 @@ def setup_populate_catalogs_endpoint(secret_key):
         conn = connect_db()
         with conn.cursor() as cursor:
             _populate_data(cursor, 'tipos_vias', ['nombre_tipo_via'], CATALOG_DATA['tipos_vias'])
+            _populate_data(cursor, 'tipos_instalacion', ['nombre'], CATALOG_DATA['tipos_instalacion'])
+            _populate_data(cursor, 'tipos_cubierta', ['nombre'], CATALOG_DATA['tipos_cubierta'])
+            _populate_data(cursor, 'distribuidoras', ['codigo_distribuidora', 'nombre_distribuidora'], CATALOG_DATA['distribuidoras'])
             _populate_data(cursor, 'tipos_finca', ['nombre_tipo_finca'], CATALOG_DATA['tipos_finca'])
             _populate_data(cursor, 'categorias_instalador', ['nombre_categoria'], CATALOG_DATA['categorias_instalador'])
             _populate_data(cursor, 'tipos_cable', ['nombre'], CATALOG_DATA['tipos_cable'])
-            _populate_data(cursor, 'distribuidoras', ['codigo_distribuidora', 'nombre_distribuidora'], CATALOG_DATA['distribuidoras'])
             _populate_data(cursor, 'paneles_solares', ['nombre_panel', 'potencia_pico_w'], CATALOG_DATA['paneles_solares'])
             _populate_data(cursor, 'inversores', ['nombre_inversor', 'monofasico_trifasico'], CATALOG_DATA['inversores'])
             _populate_data(cursor, 'baterias', ['nombre_bateria', 'capacidad_kwh'], CATALOG_DATA['baterias'])

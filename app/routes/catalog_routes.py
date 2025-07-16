@@ -16,7 +16,10 @@ CATALOG_TABLE_MAP = {
     "tipos_vias": {"table": "tipos_vias", "order_by": "nombre_tipo_via"},
     "distribuidoras": {"table": "distribuidoras", "order_by": "nombre_distribuidora"},
     "categorias_instalador": {"table": "categorias_instalador", "order_by": "nombre_categoria"},
-    "tipos_finca": {"table": "tipos_finca", "order_by": "nombre_tipo_finca"}
+    "tipos_finca": {"table": "tipos_finca", "order_by": "nombre_tipo_finca"},
+    "tipos_instalacion": {"table": "tipos_instalacion", "order_by": "nombre"},
+    "tipos_cubierta": {"table": "tipos_cubierta", "order_by": "nombre"}
+
 }
 
 @bp.route('/catalogos/<string:catalog_name>', methods=['GET'])
