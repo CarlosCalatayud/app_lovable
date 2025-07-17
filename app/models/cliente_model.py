@@ -73,20 +73,41 @@ def update_cliente(conn, cliente_id, app_user_id, data):
         logging.error(f"Fallo en transacción de actualizar cliente: {e}")
         return False, f"Error al actualizar el cliente: {e}"
 
-def delete_cliente(conn, cliente_id, app_user_id):
+def delete_cliente(conn, cliente_id, app_user_id, data):
     try:
-        with conn: # Y de nuevo, la misma estructura transaccional
+        with conn:
             with conn.cursor() as cursor:
+                # Paso 1: Desvincular al cliente de todas las instalaciones
+                cursor.execute(
+                    "UPDATE instalaciones SET cliente_id = NULL WHERE cliente_id = %s",
+                    (cliente_id,)
+                )
+                
+                # Paso 2: Borrar al cliente y su dirección (lógica existente)
                 cursor.execute("SELECT direccion_id FROM clientes WHERE id = %s AND app_user_id = %s", (cliente_id, app_user_id))
                 result = cursor.fetchone()
-                if not result: raise ValueError("Cliente no encontrado o no autorizado.")
+                if not result:
+                    raise ValueError("Cliente no encontrado o no autorizado.")
                 
                 direccion_id = result['direccion_id']
                 cursor.execute("DELETE FROM clientes WHERE id = %s", (cliente_id,))
                 if direccion_id is not None:
                     cursor.execute("DELETE FROM direcciones WHERE id = %s", (direccion_id,))
-        logging.info(f"Cliente ID: {cliente_id} eliminado y COMMIT realizado.")
+
+        logging.info(f"Cliente ID: {cliente_id} eliminado y desvinculado de instalaciones.")
         return True, "Cliente eliminado correctamente."
     except Exception as e:
-        logging.error(f"Fallo en transacción de eliminar cliente (ROLLBACK automático): {e}")
+        logging.error(f"Fallo en transacción de eliminar cliente: {e}")
         return False, f"Error al eliminar el cliente: {e}"
+
+
+def get_usage_count(conn, cliente_id, app_user_id):
+    """Cuenta en cuántas instalaciones se está usando un cliente."""
+    # Verificamos que el cliente pertenece al usuario para seguridad
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM clientes WHERE id = %s AND app_user_id = %s", (cliente_id, app_user_id))
+    if not cursor.fetchone():
+        return 0 # Si no le pertenece, no tiene "usos" para él.
+        
+    cursor.execute("SELECT COUNT(*) FROM instalaciones WHERE cliente_id = %s", (cliente_id,))
+    return cursor.fetchone()['count']

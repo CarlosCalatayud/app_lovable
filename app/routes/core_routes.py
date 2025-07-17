@@ -359,3 +359,22 @@ def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión
     except Exception as e:
         current_app.logger.error(f"Error general en generate_selected_docs_api: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor al generar documentos."}), 500
+
+
+@bp.route('/clientes/<int:cliente_id>/usage', methods=['GET'])
+@token_required
+def get_cliente_usage(conn, cliente_id):
+    count = cliente_model.get_usage_count(conn, cliente_id, g.user_id)
+    return jsonify({'usage_count': count})
+
+@bp.route('/promotores/<int:promotor_id>/usage', methods=['GET'])
+@token_required
+def get_promotor_usage(conn, promotor_id):
+    count = promotor_model.get_usage_count(conn, promotor_id, g.user_id)
+    return jsonify({'usage_count': count})
+
+@bp.route('/instaladores/<int:instalador_id>/usage', methods=['GET'])
+@token_required
+def get_instalador_usage(conn, instalador_id):
+    count = instalador_model.get_usage_count(conn, instalador_id, g.user_id)
+    return jsonify({'usage_count': count})

@@ -80,19 +80,48 @@ def update_promotor(conn, promotor_id, app_user_id, data):
         return False, f"Error al actualizar el promotor: {e}"
 
 def delete_promotor(conn, promotor_id, app_user_id):
+    """
+    Elimina un promotor y su dirección asociada. Antes de borrarlo,
+    desvincula al promotor de cualquier instalación existente, poniendo
+    la columna 'promotor_id' a NULL en la tabla 'instalaciones'.
+    """
     try:
-        with conn:
+        with conn: # Inicia la transacción. COMMIT o ROLLBACK es automático.
             with conn.cursor() as cursor:
+                
+                # CTO: PASO 1 - DESVINCULAR DE INSTALACIONES
+                # Esta sentencia busca todas las instalaciones que usan este promotor
+                # y las "libera" poniendo su promotor_id a NULL.
+                # Es seguro ejecutarla incluso si no hay ninguna.
+                cursor.execute(
+                    "UPDATE instalaciones SET promotor_id = NULL WHERE promotor_id = %s",
+                    (promotor_id,)
+                )
+                
+                # CTO: PASO 2 - BORRAR EL PROMOTOR Y SU DIRECCIÓN (Lógica original)
+                # Primero, verificamos que el promotor pertenece al usuario y obtenemos su direccion_id
                 cursor.execute("SELECT direccion_fiscal_id FROM promotores WHERE id = %s AND app_user_id = %s", (promotor_id, app_user_id))
                 result = cursor.fetchone()
-                if not result: raise ValueError("Promotor no encontrado o no autorizado.")
+                if not result:
+                    # Si no se encuentra, puede que otro usuario intente borrarlo o ya no exista.
+                    raise ValueError("Promotor no encontrado o no autorizado para esta operación.")
                 
                 direccion_id = result['direccion_fiscal_id']
+                
+                # Ahora sí, borramos el promotor.
                 cursor.execute("DELETE FROM promotores WHERE id = %s", (promotor_id,))
+                
+                # Y si tenía una dirección asociada, también la borramos.
                 if direccion_id is not None:
                     cursor.execute("DELETE FROM direcciones WHERE id = %s", (direccion_id,))
-        logging.info(f"Promotor ID: {promotor_id} eliminado.")
+
+        logging.info(f"Promotor ID: {promotor_id} eliminado y desvinculado de instalaciones.")
         return True, "Promotor eliminado correctamente."
+    except ValueError as ve:
+        # Capturamos el error si el promotor no se encuentra
+        logging.warning(f"Intento de borrado fallido para promotor {promotor_id}: {ve}")
+        return False, str(ve)
     except Exception as e:
-        logging.error(f"Fallo en transacción de eliminar promotor: {e}")
+        # Capturamos cualquier otro error inesperado de la base de datos
+        logging.error(f"Fallo en transacción de eliminar promotor {promotor_id}: {e}", exc_info=True)
         return False, f"Error al eliminar el promotor: {e}"
