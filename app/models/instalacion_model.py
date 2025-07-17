@@ -33,6 +33,10 @@ def get_all_instalaciones(conn, app_user_id, ciudad=None):
     return _execute_select(conn, sql, tuple(params))
 
 def get_instalacion_completa(conn, instalacion_id, app_user_id):
+    """
+    Obtiene TODOS los datos de una instalación específica, incluyendo TODOS los campos
+    de las direcciones anidadas para rellenar un formulario de edición.
+    """
     sql_principal = """
         SELECT
             i.*,
@@ -46,12 +50,25 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             inst.nombre_empresa AS instalador_empresa, inst.cif_empresa AS instalador_cif,
             inst.email AS instalador_email, inst.telefono_contacto AS instalador_telefono,
             inst.competencia AS instalador_competencia, inst.numero_colegiado_o_instalador, inst.numero_registro_industrial,
-            -- Dirección del Emplazamiento
-            dir_emp.nombre_via AS emplazamiento_nombre_via, dir_emp.localidad AS emplazamiento_localidad, -- etc.
-            -- Hospital Cercano (nombre y dirección completa)
+
+            -- CTO: CORRECCIÓN -> AÑADIDOS TODOS LOS CAMPOS DE LA DIRECCIÓN DE EMPLAZAMIENTO
+            dir_emp.nombre_via AS emplazamiento_nombre_via,
+            dir_emp.numero_via AS emplazamiento_numero_via,
+            dir_emp.piso_puerta AS emplazamiento_piso_puerta,
+            dir_emp.codigo_postal AS emplazamiento_codigo_postal,
+            dir_emp.localidad AS emplazamiento_localidad,
+            dir_emp.provincia AS emplazamiento_provincia,
+            
+            -- CTO: CORRECCIÓN -> AÑADIDOS TODOS LOS CAMPOS DE LA DIRECCIÓN DEL HOSPITAL
             h.nombre as hospital_nombre,
-            dir_hosp.nombre_via as hospital_nombre_via, dir_hosp.localidad as hospital_localidad, -- etc.
-            -- Nombres de Catálogos
+            dir_hosp.nombre_via as hospital_nombre_via,
+            dir_hosp.numero_via as hospital_numero_via,
+            dir_hosp.piso_puerta as hospital_piso_puerta,
+            dir_hosp.codigo_postal as hospital_codigo_postal,
+            dir_hosp.localidad as hospital_localidad,
+            dir_hosp.provincia as hospital_provincia,
+
+            -- Nombres de Catálogos para los desplegables
             ps.nombre_panel AS panel_solar_nombre, inv.nombre_inversor AS inversor_nombre,
             b.nombre_bateria AS bateria_nombre, d.nombre_distribuidora AS distribuidora_nombre,
             ti.nombre as tipo_instalacion_nombre, tc.nombre as tipo_cubierta_nombre,
@@ -75,11 +92,8 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
     instalacion_data = _execute_select(conn, sql_principal, (instalacion_id, app_user_id), one=True)
     if not instalacion_data: return None
 
-    # Consulta Secundaria para los tramos de cableado (esta ya era correcta)
     sql_tramos = "SELECT * FROM tramos_cableado_instalacion WHERE instalacion_id = %s ORDER BY id ASC;"
     tramos_data = _execute_select(conn, sql_tramos, (instalacion_id,))
-    
-    # Combinamos los resultados en un único objeto.
     instalacion_data['tramos_cableado'] = tramos_data
     
     return instalacion_data
