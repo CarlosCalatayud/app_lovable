@@ -163,14 +163,17 @@ def add_instalacion(conn, data):
     
 
 def update_instalacion(conn, instalacion_id, app_user_id, data):
+    """
+    Actualiza una instalación existente y sus datos anidados (direcciones, hospital)
+    de forma transaccional, segura y completa, usando la nueva estructura de cableado.
+    """
     dir_emplaz_data = data.get('direccion_emplazamiento', {})
     hospital_data = data.get('hospital_cercano')
-    # CTO: La variable 'tramos_data' ha sido ELIMINADA.
 
     try:
         with conn:
             with conn.cursor() as cursor:
-                # Paso 1: Seguridad y obtener estado actual (sin cambios)
+                # CTO: PASO 1 - SEGURIDAD Y OBTENER ESTADO ACTUAL
                 cursor.execute(
                     "SELECT direccion_emplazamiento_id, hospital_cercano_id FROM instalaciones WHERE id = %s AND app_user_id = %s",
                     (instalacion_id, app_user_id)
@@ -179,6 +182,10 @@ def update_instalacion(conn, instalacion_id, app_user_id, data):
                 if not instalacion_actual:
                     raise ValueError("Instalación no encontrada o acceso no autorizado.")
 
+                # CTO: LA CORRECCIÓN CRÍTICA ESTÁ AQUÍ. DEFINIMOS LAS VARIABLES QUE FALTABAN.
+                current_dir_emplaz_id = instalacion_actual['direccion_emplazamiento_id']
+                current_hospital_id = instalacion_actual['hospital_cercano_id']
+                
                 # CTO: PASO 2 - ACTUALIZAR DIRECCIÓN DE EMPLAZAMIENTO
                 if dir_emplaz_data and current_dir_emplaz_id:
                     sql_update_dir_emplaz = """
@@ -189,34 +196,31 @@ def update_instalacion(conn, instalacion_id, app_user_id, data):
                     dir_emplaz_data['id'] = current_dir_emplaz_id
                     cursor.execute(sql_update_dir_emplaz, dir_emplaz_data)
 
-                # CTO: PASO 3 - LÓGICA COMPLETA PARA EL HOSPITAL CERCANO
+                # CTO: PASO 3 - LÓGICA COMPLETA PARA EL HOSPITAL CERCANO (Sin cambios, ya era correcta)
                 new_hospital_id = current_hospital_id
-                if hospital_data and hospital_data.get('nombre'): # Si se envían datos de hospital con nombre...
-                    if current_hospital_id: # ...y ya existía un hospital, lo actualizamos.
+                if hospital_data and hospital_data.get('nombre'):
+                    if current_hospital_id:
                         cursor.execute("SELECT direccion_id FROM hospitales_cercanos WHERE id = %s", (current_hospital_id,))
                         dir_hospital_id = cursor.fetchone()['direccion_id']
-                        
-                        sql_update_dir_hosp = "UPDATE direcciones SET tipo_via_id=%(tipo_via_id)s, nombre_via=%(nombre_via)s, localidad=%(localidad)s, provincia=%(provincia)s, codigo_postal=%(codigo_postal)s WHERE id=%(id)s;"
+                        sql_update_dir_hosp = "UPDATE direcciones SET tipo_via_id=%(tipo_via_id)s, nombre_via=%(nombre_via)s, localidad=%(localidad)s, provincia=%(provincia)s, codigo_postal=%(codigo_postal)s, piso_puerta=%(piso_puerta)s WHERE id=%(id)s;"
                         hospital_data['id'] = dir_hospital_id
                         cursor.execute(sql_update_dir_hosp, hospital_data)
-                        
                         cursor.execute("UPDATE hospitales_cercanos SET nombre = %s WHERE id = %s", (hospital_data['nombre'], current_hospital_id))
-                    else: # ...y no existía un hospital, lo creamos.
-                        sql_dir_hosp = "INSERT INTO direcciones (alias, tipo_via_id, nombre_via, localidad, provincia, codigo_postal) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;"
-                        cursor.execute(sql_dir_hosp, ('Hospital', hospital_data.get('tipo_via_id'), hospital_data.get('nombre_via'), hospital_data.get('localidad'), hospital_data.get('provincia'), hospital_data.get('codigo_postal')))
+                    else:
+                        sql_dir_hosp = "INSERT INTO direcciones (alias, tipo_via_id, nombre_via, localidad, provincia, codigo_postal, piso_puerta) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;"
+                        cursor.execute(sql_dir_hosp, ('Hospital', hospital_data.get('tipo_via_id'), hospital_data.get('nombre_via'), hospital_data.get('localidad'), hospital_data.get('provincia'), hospital_data.get('codigo_postal'), hospital_data.get('piso_puerta')))
                         dir_hospital_id = cursor.fetchone()['id']
-                        
                         sql_hosp = "INSERT INTO hospitales_cercanos (nombre, direccion_id) VALUES (%s, %s) RETURNING id;"
                         cursor.execute(sql_hosp, (hospital_data['nombre'], dir_hospital_id))
                         new_hospital_id = cursor.fetchone()['id']
-                elif current_hospital_id: # Si NO se envían datos de hospital, pero existía uno, lo eliminamos.
+                elif current_hospital_id:
                     cursor.execute("SELECT direccion_id FROM hospitales_cercanos WHERE id = %s", (current_hospital_id,))
                     dir_hospital_id_to_delete = cursor.fetchone()['direccion_id']
                     cursor.execute("DELETE FROM hospitales_cercanos WHERE id = %s", (current_hospital_id,))
                     cursor.execute("DELETE FROM direcciones WHERE id = %s", (dir_hospital_id_to_delete,))
                     new_hospital_id = None
                 
-                # CTO: PASO 4 - ACTUALIZAR LA TABLA PRINCIPAL 'instalaciones' CON TODOS LOS DATOS
+                # CTO: PASO 4 - ACTUALIZAR LA TABLA PRINCIPAL 'instalaciones'
                 sql_update_instalacion = """
                     UPDATE instalaciones SET
                         cliente_id = %(cliente_id)s, promotor_id = %(promotor_id)s, instalador_id = %(instalador_id)s,
@@ -228,30 +232,15 @@ def update_instalacion(conn, instalacion_id, app_user_id, data):
                         diferencial_a = %(diferencial_a)s, sensibilidad_ma = %(sensibilidad_ma)s,
                         tipo_instalacion_id = %(tipo_instalacion_id)s, tipo_cubierta_id = %(tipo_cubierta_id)s,
                         numero_pedido_presupuesto = %(numero_pedido_presupuesto)s, hospital_cercano_id = %(hospital_cercano_id)s,
-                        -- CTO: Campos de cableado añadidos al UPDATE
-                        longitud_cable_dc_m = %(longitud_cable_dc_m)s,
-                        seccion_cable_dc_mm2 = %(seccion_cable_dc_mm2)s,
-                        material_cable_dc = %(material_cable_dc)s,
-                        longitud_cable_ac_m = %(longitud_cable_ac_m)s,
-                        seccion_cable_ac_mm2 = %(seccion_cable_ac_mm2)s,
-                        material_cable_ac = %(material_cable_ac)s
+                        longitud_cable_dc_m = %(longitud_cable_dc_m)s, seccion_cable_dc_mm2 = %(seccion_cable_dc_mm2)s,
+                        material_cable_dc = %(material_cable_dc)s, longitud_cable_ac_m = %(longitud_cable_ac_m)s,
+                        seccion_cable_ac_mm2 = %(seccion_cable_ac_mm2)s, material_cable_ac = %(material_cable_ac)s
                     WHERE id = %(id)s AND app_user_id = %(app_user_id)s;
                 """
                 data['id'] = instalacion_id
                 data['app_user_id'] = app_user_id
-                data['hospital_cercano_id'] = new_hospital_id # Usamos el ID del hospital que acabamos de gestionar
+                data['hospital_cercano_id'] = new_hospital_id
                 cursor.execute(sql_update_instalacion, data)
-
-                # CTO: PASO 5 - ACTUALIZAR TRAMOS DE CABLEADO (Patrón "Delete and Re-insert")
-                cursor.execute("DELETE FROM tramos_cableado_instalacion WHERE instalacion_id = %s", (instalacion_id,))
-                if tramos_data:
-                    sql_insert_tramos = """
-                        INSERT INTO tramos_cableado_instalacion (instalacion_id, tipo_cable_id, material, longitud_m, seccion_mm2, descripcion)
-                        VALUES (%(instalacion_id)s, %(tipo_cable_id)s, %(material)s, %(longitud_m)s, %(seccion_mm2)s, %(descripcion)s);
-                    """
-                    for tramo in tramos_data:
-                        tramo['instalacion_id'] = instalacion_id
-                    cursor.executemany(sql_insert_tramos, tramos_data)
 
         return True, "Instalación actualizada correctamente."
 
