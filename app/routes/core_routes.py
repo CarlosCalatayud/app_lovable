@@ -378,3 +378,26 @@ def get_promotor_usage(conn, promotor_id):
 def get_instalador_usage(conn, instalador_id):
     count = instalador_model.get_usage_count(conn, instalador_id, g.user_id)
     return jsonify({'usage_count': count})
+
+
+# dependencias para eliminar instalaciones con clientes instlaadores y rpmotores
+@bp.route('/clientes/<int:cliente_id>/dependencies', methods=['GET'])
+@token_required
+def get_cliente_dependencies(conn, cliente_id):
+    # Llama al nuevo método del modelo que devuelve la lista de descripciones.
+    dependencies = cliente_model.get_dependencies(conn, cliente_id, g.user_id)
+    return jsonify(dependencies)
+
+@bp.route('/promotores/<int:promotor_id>/dependencies', methods=['GET'])
+@token_required
+def get_promotor_dependencies(conn, promotor_id):
+    # Reutilizamos el mismo patrón para los promotores.
+    dependencies = promotor_model.get_dependencies(conn, promotor_id, g.user_id)
+    return jsonify(dependencies)
+
+@bp.route('/instaladores/<int:instalador_id>/dependencies', methods=['GET'])
+@token_required
+def get_instalador_dependencies(conn, instalador_id):
+    # Y también para los instaladores, manteniendo la consistencia.
+    dependencies = instalador_model.get_dependencies(conn, instalador_id, g.user_id)
+    return jsonify(dependencies)

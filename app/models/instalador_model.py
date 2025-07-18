@@ -121,3 +121,18 @@ def delete_instalador(conn, instalador_id, app_user_id, data):
     except Exception as e:
         logging.error(f"Fallo en transacción de eliminar Instalador: {e}")
         return False, f"Error al eliminar el cliInstaladorente: {e}"
+
+def get_dependencies(conn, instalador_id, app_user_id):
+    """
+    Obtiene la lista de descripciones de instalaciones que usan un instalador.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM instaladores WHERE id = %s AND app_user_id = %s", (instalador_id, app_user_id))
+    if not cursor.fetchone():
+        return []
+        
+    cursor.execute(
+        "SELECT id, descripcion FROM instalaciones WHERE instalador_id = %s",
+        (instalador_id,)
+    )
+    return [dict(row) for row in cursor.fetchall()]

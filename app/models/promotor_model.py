@@ -125,3 +125,19 @@ def delete_promotor(conn, promotor_id, app_user_id):
         # Capturamos cualquier otro error inesperado de la base de datos
         logging.error(f"Fallo en transacción de eliminar promotor {promotor_id}: {e}", exc_info=True)
         return False, f"Error al eliminar el promotor: {e}"
+
+
+def get_dependencies(conn, promotor_id, app_user_id):
+    """
+    Obtiene la lista de descripciones de instalaciones que usan un promotor.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM promotores WHERE id = %s AND app_user_id = %s", (promotor_id, app_user_id))
+    if not cursor.fetchone():
+        return []
+        
+    cursor.execute(
+        "SELECT id, descripcion FROM instalaciones WHERE promotor_id = %s",
+        (promotor_id,)
+    )
+    return [dict(row) for row in cursor.fetchall()]

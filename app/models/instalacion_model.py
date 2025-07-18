@@ -253,44 +253,47 @@ def update_instalacion(conn, instalacion_id, app_user_id, data):
 
 def delete_instalacion(conn, instalacion_id, app_user_id):
     """
-    Elimina una instalación, su dirección de emplazamiento y sus tramos de cableado
-    en una única transacción. La seguridad se verifica a través del cliente asociado.
+    Elimina una instalación y sus datos anidados (dirección, hospital) de forma segura.
+    Ya no hace referencia a la tabla obsoleta de tramos de cableado.
     """
     try:
-        with conn: # Inicia la transacción
+        with conn:
             with conn.cursor() as cursor:
-                # Paso 1: Verificar la propiedad y obtener el ID de la dirección de emplazamiento
-                # Hacemos un JOIN con clientes para asegurarnos de que el usuario es el dueño.
-                sql_get_ids = """
-                    SELECT i.direccion_emplazamiento_id 
-                    FROM instalaciones i
-                    JOIN clientes c ON i.cliente_id = c.id
-                    WHERE i.id = %s AND c.app_user_id = %s;
-                """
-                cursor.execute(sql_get_ids, (instalacion_id, app_user_id))
+                # Paso 1: Verificar propiedad y obtener IDs de las entidades anidadas
+                cursor.execute(
+                    "SELECT direccion_emplazamiento_id, hospital_cercano_id FROM instalaciones WHERE id = %s AND app_user_id = %s",
+                    (instalacion_id, app_user_id)
+                )
                 result = cursor.fetchone()
                 if not result:
                     raise ValueError("Instalación no encontrada o no autorizado para esta operación.")
                 
                 direccion_emplazamiento_id = result['direccion_emplazamiento_id']
-
-                # Paso 2: Eliminar los tramos de cableado asociados a la instalación
-                cursor.execute(
-                    "DELETE FROM tramos_cableado_instalacion WHERE instalacion_id = %s",
-                    (instalacion_id,)
-                )
+                hospital_id = result['hospital_cercano_id']
                 
-                # Paso 3: Eliminar la instalación
+                dir_hospital_id_to_delete = None
+                if hospital_id:
+                    cursor.execute("SELECT direccion_id FROM hospitales_cercanos WHERE id = %s", (hospital_id,))
+                    res_hosp = cursor.fetchone()
+                    if res_hosp:
+                        dir_hospital_id_to_delete = res_hosp['direccion_id']
+
+                # Paso 2: Eliminar la instalación.
                 cursor.execute("DELETE FROM instalaciones WHERE id = %s", (instalacion_id,))
                 
-                # Paso 4: Eliminar la dirección de emplazamiento asociada
+                # Paso 3: Eliminar el hospital y su dirección (si existían)
+                if hospital_id:
+                    cursor.execute("DELETE FROM hospitales_cercanos WHERE id = %s", (hospital_id,))
+                if dir_hospital_id_to_delete:
+                    cursor.execute("DELETE FROM direcciones WHERE id = %s", (dir_hospital_id_to_delete,))
+                
+                # Paso 4: Eliminar la dirección de emplazamiento
                 if direccion_emplazamiento_id is not None:
                     cursor.execute("DELETE FROM direcciones WHERE id = %s", (direccion_emplazamiento_id,))
 
         logging.info(f"Instalación ID: {instalacion_id} y sus datos asociados eliminados correctamente.")
         return True, "Instalación eliminada correctamente."
-
     except Exception as e:
-        logging.error(f"Fallo en la transacción de eliminar instalación: {e}")
+        logging.error(f"Fallo en la transacción de eliminar instalación: {e}", exc_info=True)
         return False, f"Error al eliminar la instalación: {e}"
     

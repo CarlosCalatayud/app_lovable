@@ -111,3 +111,21 @@ def get_usage_count(conn, cliente_id, app_user_id):
         
     cursor.execute("SELECT COUNT(*) FROM instalaciones WHERE cliente_id = %s", (cliente_id,))
     return cursor.fetchone()['count']
+
+
+def get_dependencies(conn, cliente_id, app_user_id):
+    """
+    Obtiene la lista de descripciones de instalaciones que usan un cliente.
+    """
+    # Verificamos que el cliente pertenece al usuario por seguridad.
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM clientes WHERE id = %s AND app_user_id = %s", (cliente_id, app_user_id))
+    if not cursor.fetchone():
+        return [] # Si no tiene permiso, no hay dependencias.
+        
+    cursor.execute(
+        "SELECT id, descripcion FROM instalaciones WHERE cliente_id = %s",
+        (cliente_id,)
+    )
+    # Devolvemos una lista de diccionarios, ideal para el frontend.
+    return [dict(row) for row in cursor.fetchall()]
