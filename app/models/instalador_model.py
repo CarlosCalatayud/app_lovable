@@ -95,23 +95,28 @@ def update_instalador(conn, instalador_id, app_user_id, data):
         logging.error(f"Fallo en transacción de actualizar instalador: {e}")
         return False, f"Error al actualizar el instalador: {e}"
 
-def delete_instalador(conn, instalador_id, app_user_id, data):
+def delete_instalador(conn, instalador_id, app_user_id):
+    """
+    Elimina un instalador y su dirección, desvinculándolo primero de las instalaciones.
+    """
     try:
         with conn:
             with conn.cursor() as cursor:
-                # Paso 1: Desvincular al cliente de todas las instalaciones
+                # Paso 1: Desvincular al instalador de todas las instalaciones (sin cambios)
                 cursor.execute(
                     "UPDATE instalaciones SET instalador_id = NULL WHERE instalador_id = %s",
-                    (cliente_id,)
+                    (instalador_id,)
                 )
-                
-                # Paso 2: Borrar al cliente y su dirección (lógica existente)
-                cursor.execute("SELECT direccion_id FROM instaladores WHERE id = %s AND app_user_id = %s", (instalador_id, app_user_id))
+
+                # Paso 2: Borrar al instalador y su dirección
+                # CTO: LA CORRECCIÓN CLAVE ESTÁ AQUÍ. Usamos 'direccion_empresa_id'.
+                cursor.execute("SELECT direccion_empresa_id FROM instaladores WHERE id = %s AND app_user_id = %s", (instalador_id, app_user_id))
                 result = cursor.fetchone()
                 if not result:
                     raise ValueError("Instalador no encontrado o no autorizado.")
                 
-                direccion_id = result['direccion_id']
+                # CTO: Y aquí también usamos la variable correcta.
+                direccion_id = result['direccion_empresa_id']
                 cursor.execute("DELETE FROM instaladores WHERE id = %s", (instalador_id,))
                 if direccion_id is not None:
                     cursor.execute("DELETE FROM direcciones WHERE id = %s", (direccion_id,))
@@ -119,8 +124,8 @@ def delete_instalador(conn, instalador_id, app_user_id, data):
         logging.info(f"Instalador ID: {instalador_id} eliminado y desvinculado de instalaciones.")
         return True, "Instalador eliminado correctamente."
     except Exception as e:
-        logging.error(f"Fallo en transacción de eliminar Instalador: {e}")
-        return False, f"Error al eliminar el cliInstaladorente: {e}"
+        logging.error(f"Fallo en transacción de eliminar instalador: {e}", exc_info=True)
+        return False, "Error interno del servidor al eliminar el instalador."
 
 def get_dependencies(conn, instalador_id, app_user_id):
     """

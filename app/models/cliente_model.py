@@ -73,22 +73,27 @@ def update_cliente(conn, cliente_id, app_user_id, data):
         logging.error(f"Fallo en transacción de actualizar cliente: {e}")
         return False, f"Error al actualizar el cliente: {e}"
 
-def delete_cliente(conn, cliente_id, app_user_id, data):
+def delete_cliente(conn, cliente_id, app_user_id):
+    """
+    Elimina un cliente y su dirección, desvinculándolo primero de las instalaciones.
+    """
     try:
         with conn:
             with conn.cursor() as cursor:
-                # Paso 1: Desvincular al cliente de todas las instalaciones
+                # Paso 1: Desvincular al cliente de todas las instalaciones (sin cambios)
                 cursor.execute(
                     "UPDATE instalaciones SET cliente_id = NULL WHERE cliente_id = %s",
                     (cliente_id,)
                 )
                 
-                # Paso 2: Borrar al cliente y su dirección (lógica existente)
+                # Paso 2: Borrar al cliente y su dirección
+                # CTO: LA CORRECCIÓN CLAVE ESTÁ AQUÍ. Usamos 'direccion_id'.
                 cursor.execute("SELECT direccion_id FROM clientes WHERE id = %s AND app_user_id = %s", (cliente_id, app_user_id))
                 result = cursor.fetchone()
                 if not result:
                     raise ValueError("Cliente no encontrado o no autorizado.")
                 
+                # CTO: Y aquí también usamos la variable correcta.
                 direccion_id = result['direccion_id']
                 cursor.execute("DELETE FROM clientes WHERE id = %s", (cliente_id,))
                 if direccion_id is not None:
@@ -97,8 +102,8 @@ def delete_cliente(conn, cliente_id, app_user_id, data):
         logging.info(f"Cliente ID: {cliente_id} eliminado y desvinculado de instalaciones.")
         return True, "Cliente eliminado correctamente."
     except Exception as e:
-        logging.error(f"Fallo en transacción de eliminar cliente: {e}")
-        return False, f"Error al eliminar el cliente: {e}"
+        logging.error(f"Fallo en transacción de eliminar cliente: {e}", exc_info=True)
+        return False, "Error interno del servidor al eliminar el cliente."
 
 
 def get_usage_count(conn, cliente_id, app_user_id):
