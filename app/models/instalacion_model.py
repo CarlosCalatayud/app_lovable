@@ -6,19 +6,28 @@ from .base_model import _execute_select
 # --- LECTURA ---
 def get_all_instalaciones(conn, app_user_id, ciudad=None):
     """
-    Obtiene un resumen de las instalaciones de un usuario, con filtrado opcional.
-    Versión con la sintaxis SQL corregida.
+    Obtiene un resumen de las instalaciones de un usuario.
+    Usa LEFT JOIN para mostrar instalaciones incluso si no tienen un cliente,
+    promotor o instalador asignado. La seguridad se verifica en la tabla 'instalaciones'.
     """
     sql = """
         SELECT 
             i.id, 
             i.descripcion,
             d.localidad, 
-            d.provincia
+            d.provincia,
+            -- CTO: Añadimos los nombres para que la UI pueda mostrarlos o un texto por defecto
+            c.nombre AS cliente_nombre,
+            p.nombre_razon_social AS promotor_nombre,
+            inst.nombre_empresa AS instalador_nombre
         FROM instalaciones i
-        JOIN clientes c ON i.cliente_id = c.id
+        -- CTO: LA CORRECCIÓN CLAVE. Cambiamos a LEFT JOIN para no descartar instalaciones.
+        LEFT JOIN clientes c ON i.cliente_id = c.id
+        LEFT JOIN promotores p ON i.promotor_id = p.id
+        LEFT JOIN instaladores inst ON i.instalador_id = inst.id
         LEFT JOIN direcciones d ON i.direccion_emplazamiento_id = d.id
-        WHERE c.app_user_id = %s
+        -- CTO: El filtro de seguridad ahora se aplica a la tabla principal 'instalaciones'.
+        WHERE i.app_user_id = %s
     """
     
     params = [app_user_id]
@@ -27,7 +36,6 @@ def get_all_instalaciones(conn, app_user_id, ciudad=None):
         sql += " AND lower(d.localidad) LIKE %s"
         params.append(f"%{ciudad.lower()}%")
 
-    # CTO: CORRECCIÓN - Solo hay UNA cláusula ORDER BY al final.
     sql += " ORDER BY i.id DESC"
     
     return _execute_select(conn, sql, tuple(params))
