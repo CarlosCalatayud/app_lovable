@@ -1,6 +1,6 @@
 # app/routes/ecommerce_routes.py
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from app.auth import token_required
 # Importamos nuestra nueva clase de servicio
 from app.services.woocommerce_service import WooCommerceService
