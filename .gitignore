@@ -27,4 +27,8 @@ coverage
 *.sln
 *.sw?
 
+current_requirements.txt
+merged_requirements.txt
+old_requirements.txt
+
 *.tsbuildinfo
