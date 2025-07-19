@@ -48,12 +48,14 @@ def get_products_by_category_route(conn, category_id):
 @bp.route('/ecommerce/products/<int:product_id>', methods=['GET'])
 @token_required
 def get_product_detail(conn, product_id):
-    """Endpoint para obtener los detalles completos de un producto."""
-    product = wc_service.get_product_by_id(product_id)
+    """
+    Endpoint para obtener los detalles completos de un producto, con el precio de los 'bundles' calculado.
+    """
+    # CTO: Llamamos a la nueva función del servicio que hace la magia.
+    product = wc_service.get_product_with_calculated_price(product_id)
     
     if isinstance(product, dict) and 'error' in product:
-        # Si el error es un 404 de WooCommerce, lo pasamos al frontend.
-        status_code = 404 if "Producto no encontrado" in product['error'] else 503
+        status_code = 404 if "Producto no encontrado" in product.get('error', '') else 503
         return jsonify(product), status_code
     
     return jsonify(product)

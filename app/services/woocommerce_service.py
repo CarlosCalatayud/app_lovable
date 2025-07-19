@@ -84,22 +84,52 @@ class WooCommerceService:
             logging.error(f"Excepción al contactar con WooCommerce para obtener productos por categoría ({category_id}): {e}")
             return {"error": "No se pudo conectar con la tienda de WooCommerce."}
 
-    def get_product_by_id(self, product_id):
-        """Obtiene todos los detalles de un único producto por su ID."""
-        if not self.wcapi:
-            return {"error": "El servicio de WooCommerce no está configurado correctamente."}
+    # CTO: NUEVA función principal para obtener productos. Reemplaza a la antigua 'get_product_by_id'.
+    def get_product_with_calculated_price(self, product_id):
+        """
+        Obtiene los detalles de un producto y, si es un 'bundle' con precio 0,
+        calcula su precio real de forma recursiva.
+        """
+        product_data = self.get_product_by_id(product_id)
         
-        try:
-            # CTO: No usamos _fields aquí porque queremos TODA la información del producto.
-            response = self.wcapi.get(f"products/{product_id}")
-            if response.status_code == 200:
-                return response.json()
-            else:
-                logging.error(f"Error al obtener el producto {product_id} de WooCommerce: {response.status_code} {response.text}")
-                return {"error": f"Producto no encontrado o error en WooCommerce: {response.status_code}"}
-        except Exception as e:
-            logging.error(f"Excepción al contactar con WooCommerce para obtener el producto {product_id}: {e}")
-            return {"error": "No se pudo conectar con la tienda de WooCommerce."}
+        if product_data and 'error' not in product_data:
+            # Si el producto es un 'bundle' y su precio es 0, calculamos el real.
+            if product_data.get('type') == 'bundle' and float(product_data.get('price', 0)) == 0:
+                calculated_price = self._calculate_bundle_price(product_data)
+                # Sobreescribimos el precio en el objeto que devolveremos al frontend.
+                product_data['price'] = str(calculated_price) # Lo devolvemos como string para ser consistentes
+        
+        return product_data
+
+
+    # CTO: Función de ayuda RECURSIVA y PRIVADA para calcular el precio.
+    def _calculate_bundle_price(self, product_data):
+        """
+        Función recursiva para calcular el precio total de un producto 'bundle'.
+        """
+        total_price = 0.0
+        # Los productos compuestos tienen una clave 'bundled_items'
+        if 'bundled_items' in product_data and product_data['bundled_items']:
+            for item in product_data['bundled_items']:
+                item_id = item['product_id']
+                item_quantity = int(item['quantity_default'])
+                
+                # Obtenemos los detalles completos del sub-producto
+                sub_product_data = self.get_product_by_id(item_id)
+                
+                if sub_product_data and 'error' not in sub_product_data:
+                    sub_product_price = 0.0
+                    # CTO: ¡LA RECURSIÓN! Si el sub-producto también es un bundle, volvemos a llamar a esta misma función.
+                    if sub_product_data.get('type') == 'bundle':
+                        sub_product_price = self._calculate_bundle_price(sub_product_data)
+                    else:
+                        # Si es un producto simple, tomamos su precio directamente.
+                        sub_product_price = float(sub_product_data.get('price', 0))
+                    
+                    total_price += sub_product_price * item_quantity
+        
+        return total_price
+
 
     def search_products(self, search_term, category_id=None, per_page=20, page=1):
         """
