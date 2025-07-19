@@ -114,7 +114,7 @@ class WooCommerceService:
             'search': search_term,
             'per_page': per_page,
             'page': page,
-            '_fields': 'id,name,price,stock_status,images,permalink,short_description,average_rating'
+            '_fields': 'id,name,price,regular_price,sale_price,stock_status,images,permalink,short_description,average_rating'
         }
 
         # CTO: LA MEJORA CLAVE -> Si nos pasan un category_id, lo añadimos a los parámetros.
