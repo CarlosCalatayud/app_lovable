@@ -45,20 +45,44 @@ def get_products_by_category_route(conn, category_id):
     
     return jsonify(products)
 
+@bp.route('/ecommerce/products/<int:product_id>', methods=['GET'])
+@token_required
+def get_product_detail(conn, product_id):
+    """Endpoint para obtener los detalles completos de un producto."""
+    product = wc_service.get_product_by_id(product_id)
+    
+    if isinstance(product, dict) and 'error' in product:
+        # Si el error es un 404 de WooCommerce, lo pasamos al frontend.
+        status_code = 404 if "Producto no encontrado" in product['error'] else 503
+        return jsonify(product), status_code
+    
+    return jsonify(product)
+
 
 @bp.route('/ecommerce/products/search', methods=['GET'])
 @token_required
 def search_products(conn):
-    """Endpoint para buscar productos, ahora con paginación."""
+    """
+    Endpoint para buscar productos. Acepta 'term' y parámetros opcionales
+    de paginación ('page', 'per_page') y filtrado por categoría ('category_id').
+    Ej: /search?term=panel&category_id=15
+    """
+    # Obtenemos todos los parámetros de la URL
     search_term = request.args.get('term', '')
-    # CTO: Leemos los parámetros de paginación para la búsqueda.
-    per_page = request.args.get('per_page', 20, type=int)
+    category_id = request.args.get('category_id', None, type=int) # Nuevo parámetro opcional
     page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
 
     if not search_term:
         return jsonify({'error': 'El parámetro "term" es obligatorio.'}), 400
 
-    products = wc_service.search_products(search_term, per_page=per_page, page=page)
+    # Pasamos todos los parámetros a nuestra nueva y potente función de servicio
+    products = wc_service.search_products(
+        search_term, 
+        category_id=category_id, 
+        page=page, 
+        per_page=per_page
+    )
     
     if isinstance(products, dict) and 'error' in products:
         return jsonify(products), 503

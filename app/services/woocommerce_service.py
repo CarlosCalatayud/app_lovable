@@ -84,41 +84,42 @@ class WooCommerceService:
             logging.error(f"Excepción al contactar con WooCommerce para obtener productos por categoría ({category_id}): {e}")
             return {"error": "No se pudo conectar con la tienda de WooCommerce."}
 
-
-    def search_products(self, search_term, per_page=20, page=1):
-        """Busca productos en la tienda, soportando paginación."""
+    def get_product_by_id(self, product_id):
+        """Obtiene todos los detalles de un único producto por su ID."""
         if not self.wcapi:
             return {"error": "El servicio de WooCommerce no está configurado correctamente."}
         
-        # CTO: Añadimos per_page y page a los parámetros de búsqueda.
+        try:
+            # CTO: No usamos _fields aquí porque queremos TODA la información del producto.
+            response = self.wcapi.get(f"products/{product_id}")
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logging.error(f"Error al obtener el producto {product_id} de WooCommerce: {response.status_code} {response.text}")
+                return {"error": f"Producto no encontrado o error en WooCommerce: {response.status_code}"}
+        except Exception as e:
+            logging.error(f"Excepción al contactar con WooCommerce para obtener el producto {product_id}: {e}")
+            return {"error": "No se pudo conectar con la tienda de WooCommerce."}
+
+    def search_products(self, search_term, category_id=None, per_page=20, page=1):
+        """
+        Busca productos en la tienda. Si se proporciona un category_id, la búsqueda
+        se limita a esa categoría específica. Soporta paginación.
+        """
+        if not self.wcapi:
+            return {"error": "El servicio de WooCommerce no está configurado correctamente."}
+        
+        # Preparamos los parámetros base
         params = {
             'search': search_term,
             'per_page': per_page,
             'page': page,
             '_fields': 'id,name,price,stock_status,images,permalink,short_description,average_rating'
         }
-        
-        try:
-            response = self.wcapi.get("products", params=params)
-            if response.status_code == 200:
-                return response.json()
-            else:
-                logging.error(f"Error al buscar productos en WooCommerce: {response.status_code} {response.text}")
-                return {"error": f"Respuesta inesperada de WooCommerce: {response.status_code}"}
-        except Exception as e:
-            logging.error(f"Excepción al contactar con WooCommerce para buscar productos: {e}")
-            return {"error": "No se pudo conectar con la tienda de WooCommerce."}
 
-    def search_products(self, search_term):
-        """Busca productos en la tienda que coincidan con un término de búsqueda."""
-        if not self.wcapi:
-            return {"error": "El servicio de WooCommerce no está configurado correctamente."}
-        
-        # Preparamos los parámetros para la API de WooCommerce. 'search' es el parámetro clave.
-        params = {
-            'search': search_term,
-            'per_page': 20  # Limitamos a 20 resultados para no sobrecargar la respuesta
-        }
+        # CTO: LA MEJORA CLAVE -> Si nos pasan un category_id, lo añadimos a los parámetros.
+        if category_id:
+            params['category'] = str(category_id)
         
         try:
             response = self.wcapi.get("products", params=params)
