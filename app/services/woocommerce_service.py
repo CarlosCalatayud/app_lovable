@@ -47,6 +47,24 @@ class WooCommerceService:
             logging.error(f"Excepción al contactar con WooCommerce para obtener categorías: {e}")
             return {"error": "No se pudo conectar con la tienda de WooCommerce."}
 
-# Puedes añadir más métodos aquí en el futuro, como:
-# def search_products(self, search_term):
-#     ...
+    def search_products(self, search_term):
+        """Busca productos en la tienda que coincidan con un término de búsqueda."""
+        if not self.wcapi:
+            return {"error": "El servicio de WooCommerce no está configurado correctamente."}
+        
+        # Preparamos los parámetros para la API de WooCommerce. 'search' es el parámetro clave.
+        params = {
+            'search': search_term,
+            'per_page': 20  # Limitamos a 20 resultados para no sobrecargar la respuesta
+        }
+        
+        try:
+            response = self.wcapi.get("products", params=params)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logging.error(f"Error al buscar productos en WooCommerce: {response.status_code} {response.text}")
+                return {"error": f"Respuesta inesperada de WooCommerce: {response.status_code}"}
+        except Exception as e:
+            logging.error(f"Excepción al contactar con WooCommerce para buscar productos: {e}")
+            return {"error": "No se pudo conectar con la tienda de WooCommerce."}
