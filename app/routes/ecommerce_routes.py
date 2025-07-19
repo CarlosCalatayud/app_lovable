@@ -13,17 +13,38 @@ wc_service = WooCommerceService()
 @bp.route('/ecommerce/categories', methods=['GET'])
 @token_required
 def get_categories(conn):
-    """Endpoint para obtener categorías, ahora con paginación opcional."""
-    # CTO: Leemos los parámetros de la URL, con valores por defecto seguros.
-    per_page = request.args.get('per_page', 100, type=int)
-    page = request.args.get('page', 1, type=int)
-
-    categories = wc_service.get_product_categories(per_page=per_page, page=page)
+    """
+    Obtiene categorías. Acepta un parámetro opcional 'parent_id' para subcategorías.
+    Ej: /ecommerce/categories?parent_id=15
+    """
+    parent_id = request.args.get('parent_id', 0, type=int)
+    categories = wc_service.get_product_categories(parent_id=parent_id)
     
     if isinstance(categories, dict) and 'error' in categories:
         return jsonify(categories), 503
     
     return jsonify(categories)
+
+@bp.route('/ecommerce/categories/<int:category_id>/products', methods=['GET'])
+@token_required
+def get_products_by_category_route(conn, category_id):
+    """
+    Nuevo endpoint para obtener productos de una categoría específica, con paginación.
+    Ejemplo de uso: /api/ecommerce/categories/15/products?page=1&per_page=10
+    """
+    # Leemos los parámetros de la URL para la paginación, con valores por defecto.
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    # Llamamos a nuestro nuevo método del servicio.
+    products = wc_service.get_products_by_category(category_id, per_page=per_page, page=page)
+    
+    # Manejo de errores estándar.
+    if isinstance(products, dict) and 'error' in products:
+        return jsonify(products), 503
+    
+    return jsonify(products)
+
 
 @bp.route('/ecommerce/products/search', methods=['GET'])
 @token_required
