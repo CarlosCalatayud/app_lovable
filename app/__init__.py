@@ -32,12 +32,14 @@ def create_app(test_config=None):
         from .routes.calculator_routes import bp as calculator_bp
         from .routes.catalog_routes import bp as catalog_bp
         from .routes.utility_routes import bp as utility_bp # <-- El nuevo
+        from .routes import ecommerce_routes
 
         # Registrar los blueprints en la aplicación con sus prefijos de URL
         app.register_blueprint(core_bp, url_prefix='/api')
         app.register_blueprint(calculator_bp, url_prefix='/api/calculator')
         app.register_blueprint(catalog_bp, url_prefix='/api')
         app.register_blueprint(utility_bp, url_prefix='/') # Rutas de utilidad en la raíz
+        app.register_blueprint(ecommerce_routes.bp, url_prefix='/api')
         
         logging.info("Aplicación creada y blueprints registrados.")
 
