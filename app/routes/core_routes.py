@@ -306,7 +306,12 @@ def generate_docs_api(conn, instalacion_id):
 
         if len(generated_files_in_memory) == 1:
             file_to_send = generated_files_in_memory[0]
-            return send_file(io.BytesIO(file_to_send["bytes"]), mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', as_attachment=True, download_name=file_to_send["name"])
+            return send_file(
+                io.BytesIO(file_to_send["bytes"]), 
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
+                as_attachment=True, 
+                download_name=file_to_send["name"]
+            )
         else:
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -314,7 +319,12 @@ def generate_docs_api(conn, instalacion_id):
                     zf.writestr(file_info["name"], file_info["bytes"])
             zip_buffer.seek(0)
             zip_filename = f"Documentacion Inst {instalacion_id}.zip"
-            return send_file(zip_buffer, mimetype='application/zip', as_attachment=True, download_name=zip_filename)
+            return send_file(
+                zip_buffer, 
+                mimetype='application/zip', 
+                as_attachment=True, 
+                download_name=zip_filename
+            )
 
     except Exception as e:
         current_app.logger.error(f"Error en generate_docs_api para instalación {instalacion_id}: {e}", exc_info=True)
