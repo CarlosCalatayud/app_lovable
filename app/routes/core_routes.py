@@ -1,5 +1,5 @@
 # app/routes/core_routes.py
-from flask import Blueprint, jsonify, request, current_app, send_file, g
+from flask import Blueprint, jsonify, request, current_app, send_file, g, make_response
 from decimal import Decimal
 import json, io, zipfile, os
 import docxtpl
@@ -338,12 +338,17 @@ def generate_docs_api(conn, instalacion_id):
         if len(generated_files_in_memory) == 1:
             file_to_send = generated_files_in_memory[0]
             current_app.logger.info(f"Enviando 1 archivo: {file_to_send['name']} con mimetype {file_to_send['mimetype']}")
-            return send_file(
-                io.BytesIO(file_to_send["bytes"]),
-                mimetype=file_to_send["mimetype"],
-                as_attachment=True,
-                download_name=file_to_send["name"]
-            )
+            
+            # --- INICIO DE LA CORRECCIÓN ESTRATÉGICA ---
+            # Construimos la respuesta manualmente para tener control total sobre las cabeceras.
+            response = make_response(file_to_send["bytes"])
+            response.headers['Content-Type'] = file_to_send["mimetype"]
+            response.headers['Content-Disposition'] = f"attachment; filename=\"{file_to_send['name']}\""
+            # Esta es la cabecera clave que podría solucionar el problema.
+            # Le pide a los proxies que no modifiquen la codificación del contenido.
+            response.headers['Content-Encoding'] = 'identity'
+            response.headers['Content-Length'] = len(file_to_send["bytes"])
+            return response
         else:
             current_app.logger.info(f"Enviando {len(generated_files_in_memory)} archivos en un ZIP.")
             zip_buffer = io.BytesIO()
