@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request, current_app, send_file, g
 from decimal import Decimal
 import json, io, zipfile, os
 import docxtpl
+from app.utils import PROVINCE_TO_COMMUNITY_MAP, COMMUNITIES
 
 # CTO: 1. Importamos los módulos específicos, NO el antiguo 'database'
 from app.auth import token_required
@@ -257,93 +258,62 @@ def delete_instalacion_api(conn, instalacion_id):
 @bp.route('/instalaciones/<int:instalacion_id>/generate-selected-docs', methods=['POST'])
 @token_required
 def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión 'conn' ahora es un argumento.
+    user_id = g.user_id
     data = request.json
-    selected_template_files = data.get('documentos', [])
+    selected_doc_files = data.get('documentos', [])
+    community_slug = data.get('community_slug') # El frontend ahora nos envía la comunidad seleccionada
 
-    current_app.logger.info(f"Petición para generar docs para instalación ID: {instalacion_id}. Docs: {selected_template_files}")
-
-    if not selected_template_files:
+    if not selected_doc_files:
         return jsonify({"error": "No se seleccionaron documentos para generar."}), 400
+    if not community_slug:
+        return jsonify({"error": "No se especificó la comunidad autónoma."}), 400
 
-    # ### CTO: 2. Se elimina toda la gestión manual de la conexión (get_db_connection, try/finally conn.close)
     try:
-        # La lógica de negocio principal empieza aquí directamente.
-        # El chequeo de `g.user_id` asegura que solo el dueño puede generar los documentos.
-        instalacion_completa = instalacion_model.get_instalacion_completa(conn, instalacion_id, g.user_id)
+        # 1. Obtener todos los datos necesarios para el contexto
+        instalacion_completa = instalacion_model.get_instalacion_completa(conn, instalacion_id, user_id)
         if not instalacion_completa:
-            # Este mensaje es seguro, ya que no revela la existencia de la instalación a otros usuarios.
             return jsonify({"error": "Instalación no encontrada o no pertenece a este usuario"}), 404
 
+        # 2. Preparar el contexto (igual que antes, pero más limpio)
         contexto_base = dict(instalacion_completa)
-        
-        # --- Construcción del contexto (esta lógica era correcta y se mantiene) ---
-        contexto_base.update({
-            'clienteNombre': contexto_base.get('promotor_nombre', ''),
-            'clienteDireccion': contexto_base.get('promotor_direccion', ''),
-            'clienteDni': contexto_base.get('promotor_cif', ''),
-            'instaladorEmpresa': contexto_base.get('instalador_empresa', ''),
-            'instaladorDireccion': contexto_base.get('instalador_direccion', ''),
-            'instaladorCif': contexto_base.get('instalador_cif', ''),
-            'instaladorTecnicoNombre': contexto_base.get('instalador_tecnico_nombre', ''),
-            'instaladorTecnicoCompetencia': contexto_base.get('instalador_tecnico_competencia', '')
-        })
-
+        # Añadir datos de catálogo
         if nombre_panel := contexto_base.get('panel_solar'):
             if panel_data := catalog_model.get_panel_by_name(conn, nombre_panel):
                 contexto_base.update(dict(panel_data))
-
         if nombre_inversor := contexto_base.get('inversor'):
             if inversor_data := catalog_model.get_inversor_by_name(conn, nombre_inversor):
                 contexto_base.update(dict(inversor_data))
-        
         if nombre_bateria := contexto_base.get('bateria'):
              if bateria_data := catalog_model.get_bateria_by_name(conn, nombre_bateria):
                  contexto_base.update(dict(bateria_data))
-
+        
+        # 3. Llamar al servicio para enriquecer el contexto con cálculos
         contexto_final = doc_generator_service.prepare_document_context(contexto_base)
-        contexto_final.update(contexto_final)
-        
-        # --- Logging seguro del contexto (esta lógica era correcta y se mantiene) ---
-        contexto_para_log = {
-            key: float(value) if isinstance(value, Decimal) else (value.isoformat() if hasattr(value, 'isoformat') else value)
-            for key, value in contexto_final.items()
-        }
-        current_app.logger.info(f"Contexto final para plantilla: {json.dumps(contexto_para_log, indent=2, ensure_ascii=False)}")
-        
-        # --- Generación de archivos en memoria (esta lógica era correcta y se mantiene) ---
+
+        # 4. Generar archivos en memoria
         generated_files_in_memory = []
-        available_templates_map = {
-            "MEMORIA TECNICA.docx": "Memoria Tecnica Instalacion {}.docx",
-            "DECLARACION RESPONSABLE.docx": "Declaracion de responsable {}.docx",
-            "ESTUDIO BASICO SEG Y SALUD.docx": "Estudio Basico de Seguridad y Salud {}.docx",
-            "GESTION RESIDUOS.docx": "Gestion de Residuos {}.docx",
-            "PLAN DE CONTROL DE CALIDAD.docx": "Plan de Control De Calidad {}.docx",
-            "CERTIFICADO FIN DE OBRA.docx": "Certificado Fin de Obra {}.docx",
-            # ... resto de plantillas
-        }
-        templates_base_path = current_app.config.get('TEMPLATES_PATH', './templates')
+        templates_base_path = os.path.join('templates', community_slug)
 
-        for template_file_name in selected_template_files:
-            if template_file_name in available_templates_map:
-                template_path = os.path.join(templates_base_path, template_file_name)
-                if not os.path.exists(template_path):
-                    current_app.logger.error(f"Plantilla no encontrada: {template_path}")
-                    continue
-
-                file_stream = io.BytesIO()
-                # Usamos docxtpl directamente, no una función de nuestro generador.
-                doc = docxtpl.DocxTemplate(template_path)
-                doc.render(contexto_final)
-                doc.save(file_stream)
-                file_stream.seek(0)
+        for template_file_name in selected_doc_files:
+            template_path = os.path.join(templates_base_path, template_file_name)
+            
+            try:
+                # La generación se delega a la nueva función del servicio
+                file_bytes = doc_generator_service.generate_document(template_path, contexto_final)
                 
-                output_filename = available_templates_map[template_file_name].format(instalacion_id)
-                generated_files_in_memory.append({"name": output_filename, "bytes": file_stream.getvalue()})
+                # Crear un nombre de archivo de salida "amigable"
+                base_name = os.path.splitext(template_file_name)[0].replace("_", " ").title()
+                output_filename = f"{base_name} - Inst {instalacion_id}.docx"
+                
+                generated_files_in_memory.append({"name": output_filename, "bytes": file_bytes})
+            except FileNotFoundError:
+                current_app.logger.error(f"Plantilla no encontrada: {template_path}")
+                continue # Salta a la siguiente plantilla si una no existe
 
         if not generated_files_in_memory:
-            return jsonify({"error": "No se pudieron generar los documentos seleccionados."}), 500
+            return jsonify({"error": "No se pudieron generar los documentos seleccionados (plantillas no encontradas)."}), 500
 
-        # --- Envío de la respuesta (esta lógica era correcta y se mantiene) ---
+        # 5. Enviar respuesta como archivo único o ZIP
         if len(generated_files_in_memory) == 1:
             file_to_send = generated_files_in_memory[0]
             return send_file(io.BytesIO(file_to_send["bytes"]), mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', as_attachment=True, download_name=file_to_send["name"])
@@ -353,12 +323,55 @@ def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión
                 for file_info in generated_files_in_memory:
                     zf.writestr(file_info["name"], file_info["bytes"])
             zip_buffer.seek(0)
-            zip_filename = f"Documentos_Instalacion_{instalacion_id}.zip"
+            zip_filename = f"Documentacion Inst {instalacion_id}.zip"
             return send_file(zip_buffer, mimetype='application/zip', as_attachment=True, download_name=zip_filename)
 
     except Exception as e:
-        current_app.logger.error(f"Error general en generate_selected_docs_api: {e}", exc_info=True)
+        current_app.logger.error(f"Error general en generate_docs_refactored: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor al generar documentos."}), 500
+
+@bp.route('/instalaciones/<int:instalacion_id>/document_options', methods=['GET'])
+@token_required
+def get_document_options(conn, instalacion_id):
+    user_id = g.user_id
+    # Usamos get_instalacion_by_id porque solo necesitamos la provincia, es más ligero.
+    instalacion = instalacion_model.get_instalacion_by_id(conn, instalacion_id, user_id) 
+    if not instalacion:
+        return jsonify({"error": "Instalación no encontrada"}), 404
+
+    # 1. Determinar la comunidad autónoma
+    provincia = instalacion.get('provincia') # Asegúrate que 'get_instalacion_by_id' devuelve 'provincia'
+    if not provincia:
+        # Fallback si la instalación no tiene provincia definida
+        return jsonify({
+            "all_communities": [{"slug": k, "name": v} for k, v in COMMUNITIES.items()],
+            "selected_community_slug": None,
+            "available_docs": []
+        }), 200
+        
+    community_slug = PROVINCE_TO_COMMUNITY_MAP.get(provincia, None)
+
+    # 2. Obtener los documentos para esa comunidad
+    available_docs = []
+    if community_slug:
+        available_docs = doc_generator_service.get_available_docs_for_community(community_slug)
+
+    # 3. Devolver toda la información necesaria para el popup de Lovable
+    response_data = {
+        "all_communities": [{"slug": k, "name": v} for k, v in sorted(COMMUNITIES.items(), key=lambda item: item[1])],
+        "selected_community_slug": community_slug,
+        "available_docs": available_docs
+    }
+    
+    return jsonify(response_data), 200
+
+@bp.route('/documentos_por_comunidad/<string:community_slug>', methods=['GET'])
+@token_required
+def get_docs_by_community(conn, community_slug):
+    # Endpoint auxiliar para que el frontend refresque la lista de documentos
+    # si el usuario cambia la comunidad en el desplegable.
+    docs = doc_generator_service.get_available_docs_for_community(community_slug)
+    return jsonify({"available_docs": docs}), 200
 
 
 @bp.route('/clientes/<int:cliente_id>/usage', methods=['GET'])

@@ -2,11 +2,35 @@
 from docxtpl import DocxTemplate
 import os
 import datetime # Puede que no sea necesario si la fecha ya está en el context_dict
+
 # --- Constantes de Texto (movidas desde calc.py) ---
 TEXTO_SIN_ACUMULACION = "La instalación no dispone de sistema de acumulación."
 TEXTO_CON_ACUMULACION = "La instalación dispone de sistema de acumulación."
 TEXTO_UN_STRING = "La instalación fotovoltaica está compuesta por un único string."
 RHO_COBRE = 0.0172  # Ohm * mm^2 / m
+
+def get_available_docs_for_community(community_slug: str) -> list:
+    """
+    Escanea el directorio de plantillas para una comunidad autónoma
+    y devuelve una lista de los documentos disponibles.
+    """
+    # Asumimos que la aplicación se ejecuta desde la raíz del proyecto.
+    # Ajustar si la ruta base es diferente en producción.
+    template_dir = os.path.join('templates', community_slug)
+    
+    if not os.path.isdir(template_dir):
+        return []  # Si no hay carpeta para esa comunidad, no hay documentos.
+
+    docs = []
+    for filename in sorted(os.listdir(template_dir)):
+        if filename.endswith('.docx') and not filename.startswith('~'):
+            # Devolvemos un 'id' (el nombre del archivo) y un nombre 'amigable'
+            docs.append({
+                "id": filename,
+                "name": os.path.splitext(filename)[0].replace("_", " ").title()
+            })
+    return docs
+
 
 # La nombramos con un guion bajo para indicar que es una función "privada" de este módulo.
 def _get_input(source_dict, key, default=None, data_type=str):
