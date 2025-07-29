@@ -333,36 +333,30 @@ def generate_docs_api(conn, instalacion_id):
 
         if not generated_files_in_memory:
             return jsonify({"error": "No se pudieron generar los documentos. Las plantillas podrían no existir para la comunidad seleccionada."}), 500
+        # Siempre empaquetamos la respuesta en un ZIP, sin importar cuántos archivos haya.
+        # Esto unifica el flujo y se apoya en el comportamiento que sabemos que funciona.
+        
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file_info in generated_files_in_memory:
+                zf.writestr(file_info["name"], file_info["bytes"])
+        zip_buffer.seek(0)
 
         # --- PASO 4: LÓGICA DE RESPUESTA CORREGIDA Y EXPLÍCITA ---
         if len(generated_files_in_memory) == 1:
-            file_to_send = generated_files_in_memory[0]
-            current_app.logger.info(f"Enviando 1 archivo: {file_to_send['name']} con mimetype {file_to_send['mimetype']}")
-            
-            # --- INICIO DE LA CORRECCIÓN ESTRATÉGICA ---
-            # Construimos la respuesta manualmente para tener control total sobre las cabeceras.
-            response = make_response(file_to_send["bytes"])
-            response.headers['Content-Type'] = file_to_send["mimetype"]
-            response.headers['Content-Disposition'] = f"attachment; filename=\"{file_to_send['name']}\""
-            # Esta es la cabecera clave que podría solucionar el problema.
-            # Le pide a los proxies que no modifiquen la codificación del contenido.
-            response.headers['Content-Encoding'] = 'identity'
-            response.headers['Content-Length'] = len(file_to_send["bytes"])
-            return response
+            # Usamos el nombre del propio documento como nombre del zip (sin la extensión .docx).
+            zip_filename = f"{os.path.splitext(generated_files_in_memory[0]['name'])[0]}.zip"
         else:
-            current_app.logger.info(f"Enviando {len(generated_files_in_memory)} archivos en un ZIP.")
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-                for file_info in generated_files_in_memory:
-                    zf.writestr(file_info["name"], file_info["bytes"])
-            zip_buffer.seek(0)
             zip_filename = f"Documentacion Inst {instalacion_id}.zip"
-            return send_file(
-                zip_buffer,
-                mimetype='application/zip',
-                as_attachment=True,
-                download_name=zip_filename
-            )
+
+        current_app.logger.info(f"Enviando respuesta como ZIP: {zip_filename}")
+
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=zip_filename
+        )
 
     except Exception as e:
         current_app.logger.error(f"Error en generate_docs_api para instalación {instalacion_id}: {e}", exc_info=True)
