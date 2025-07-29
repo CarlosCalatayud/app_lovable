@@ -12,7 +12,14 @@ def create_app(test_config=None):
     app = Flask(__name__, instance_relative_config=True)
     
     # Configuración de CORS
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # Esto permite explícitamente el origen de preview de Lovable,
+    # el Content-Type para JSON y la cabecera de Authorization.
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": "*"}}, # Permitir todos los orígenes por ahora
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], # Permitir todos los métodos comunes
+        allow_headers=["Content-Type", "Authorization"] # Permitir las cabeceras necesarias
+    )
 
     # Configuración de la aplicación desde variables de entorno o un objeto
     app.config.from_mapping(
