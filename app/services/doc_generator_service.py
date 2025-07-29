@@ -1,6 +1,6 @@
 # src/generation/doc_generator.py
 from docxtpl import DocxTemplate
-import os
+import os, io, zipfile
 import datetime # Puede que no sea necesario si la fecha ya está en el context_dict
 
 # --- Constantes de Texto (movidas desde calc.py) ---
@@ -11,25 +11,36 @@ RHO_COBRE = 0.0172  # Ohm * mm^2 / m
 
 def get_available_docs_for_community(community_slug: str) -> list:
     """
-    Escanea el directorio de plantillas para una comunidad autónoma
-    y devuelve una lista de los documentos disponibles.
+    Escanea el directorio de plantillas para una comunidad y devuelve los documentos disponibles.
     """
-    # Asumimos que la aplicación se ejecuta desde la raíz del proyecto.
-    # Ajustar si la ruta base es diferente en producción.
     template_dir = os.path.join('templates', community_slug)
-    
     if not os.path.isdir(template_dir):
-        return []  # Si no hay carpeta para esa comunidad, no hay documentos.
+        return []
 
     docs = []
+    # Usamos sorted() para asegurar un orden consistente en la lista devuelta a la API
     for filename in sorted(os.listdir(template_dir)):
         if filename.endswith('.docx') and not filename.startswith('~'):
-            # Devolvemos un 'id' (el nombre del archivo) y un nombre 'amigable'
             docs.append({
                 "id": filename,
                 "name": os.path.splitext(filename)[0].replace("_", " ").title()
             })
     return docs
+
+def generate_document(template_path: str, context: dict) -> bytes:
+    """
+    Genera un único documento .docx en memoria a partir de una plantilla y un contexto.
+    Devuelve los bytes del archivo. Lanza FileNotFoundError si la plantilla no existe.
+    """
+    if not os.path.exists(template_path):
+        raise FileNotFoundError(f"La plantilla no fue encontrada en la ruta: {template_path}")
+
+    file_stream = io.BytesIO()
+    doc = DocxTemplate(template_path)
+    doc.render(context)
+    doc.save(file_stream)
+    file_stream.seek(0)
+    return file_stream.getvalue()
 
 
 # La nombramos con un guion bajo para indicar que es una función "privada" de este módulo.

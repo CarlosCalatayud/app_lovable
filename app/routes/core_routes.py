@@ -3,11 +3,11 @@ from flask import Blueprint, jsonify, request, current_app, send_file, g
 from decimal import Decimal
 import json, io, zipfile, os
 import docxtpl
-from app.utils import PROVINCE_TO_COMMUNITY_MAP, COMMUNITIES
 
 # CTO: 1. Importamos los módulos específicos, NO el antiguo 'database'
 from app.auth import token_required
 from app.services import doc_generator_service 
+from app.utils import PROVINCE_TO_COMMUNITY_MAP, COMMUNITIES
 from app.models import (
     instalacion_model, 
     cliente_model, 
@@ -18,7 +18,7 @@ from app.models import (
 # NOTA: las funciones get_..._by_name ahora estarán en el modelo de instalación por dependencia
 # from app.services import calculation_service # Placeholder para futura refactorización de `calc.py`
 
-bp = Blueprint('core', __name__)
+core_bp  = Blueprint('core', __name__)
 
 def _sanitize_instalacion_data(data: dict) -> dict:
     numeric_fields = ['numero_paneles', 'numero_inversores', 'numero_baterias', 'potencia_contratada_w', 'longitud_cable_cc_string1', 'seccion_cable_ac_mm2', 'longitud_cable_ac_m', 'diferencial_a', 'sensibilidad_ma']
@@ -29,20 +29,20 @@ def _sanitize_instalacion_data(data: dict) -> dict:
     return sanitized_data
 
 # --- Clientes ---
-@bp.route('/clientes', methods=['GET'])
+@core_bp.route('/clientes', methods=['GET'])
 @token_required
 def get_clientes(conn):
     # CTO: 2. Usamos el modelo específico: cliente_model
     clientes = cliente_model.get_all_clientes(conn, g.user_id)
     return jsonify([dict(c) for c in clientes])
 
-@bp.route('/clientes/<int:cliente_id>', methods=['GET'])
+@core_bp.route('/clientes/<int:cliente_id>', methods=['GET'])
 @token_required
 def get_cliente(conn, cliente_id):
     cliente = cliente_model.get_cliente_by_id(conn, cliente_id, g.user_id)
     return jsonify(dict(cliente)) if cliente else (jsonify({'error': 'Cliente no encontrado'}), 404)
 
-@bp.route('/clientes', methods=['POST'])
+@core_bp.route('/clientes', methods=['POST'])
 @token_required
 def create_cliente(conn):
     data = request.json
@@ -60,14 +60,14 @@ def create_cliente(conn):
     else:
         return jsonify({'error': message}), 400
 
-@bp.route('/clientes/<int:cliente_id>', methods=['PUT'])
+@core_bp.route('/clientes/<int:cliente_id>', methods=['PUT'])
 @token_required
 def update_cliente(conn, cliente_id):
     data = request.json
     success, message = cliente_model.update_cliente(conn, cliente_id, g.user_id, data)
     return jsonify({'message': message}) if success else (jsonify({'error': message}), 400)
 
-@bp.route('/clientes/<int:cliente_id>', methods=['DELETE'])
+@core_bp.route('/clientes/<int:cliente_id>', methods=['DELETE'])
 @token_required
 def delete_cliente(conn, cliente_id):
     success, message = cliente_model.delete_cliente(conn, cliente_id, g.user_id)
@@ -75,13 +75,13 @@ def delete_cliente(conn, cliente_id):
 
 # --- Promotores --- (### CTO: Se aplican las mismas correcciones que para Clientes)
 
-@bp.route('/promotores', methods=['GET'])
+@core_bp.route('/promotores', methods=['GET'])
 @token_required
 def get_promotores(conn):
     promotores = promotor_model.get_all_promotores(conn, g.user_id)
     return jsonify(promotores)
 
-@bp.route('/promotores/<int:promotor_id>', methods=['GET'])
+@core_bp.route('/promotores/<int:promotor_id>', methods=['GET'])
 @token_required
 def get_promotor(conn, promotor_id):
     promotor = promotor_model.get_promotor_by_id(conn, promotor_id, g.user_id)
@@ -89,7 +89,7 @@ def get_promotor(conn, promotor_id):
         return jsonify(dict(promotor))
     return jsonify({'error': 'Promotor no encontrado o no pertenece a este usuario'}), 404
 
-@bp.route('/promotores', methods=['POST'])
+@core_bp.route('/promotores', methods=['POST'])
 @token_required
 def create_promotor(conn):
     data = request.json
@@ -105,7 +105,7 @@ def create_promotor(conn):
         error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
         return jsonify({'error': message}), error_code
 
-@bp.route('/promotores/<int:promotor_id>', methods=['PUT'])
+@core_bp.route('/promotores/<int:promotor_id>', methods=['PUT'])
 @token_required
 def update_promotor_api(conn, promotor_id):
     data = request.json
@@ -117,7 +117,7 @@ def update_promotor_api(conn, promotor_id):
         error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
         return jsonify({'error': message}), error_code
 
-@bp.route('/promotores/<int:promotor_id>', methods=['DELETE'])
+@core_bp.route('/promotores/<int:promotor_id>', methods=['DELETE'])
 @token_required
 def delete_promotor_api(conn, promotor_id):
     success, message = promotor_model.delete_promotor(conn, promotor_id, g.user_id)
@@ -127,13 +127,13 @@ def delete_promotor_api(conn, promotor_id):
 
 # --- Instaladores --- (### CTO: Se aplican las mismas correcciones que para Clientes)
 
-@bp.route('/instaladores', methods=['GET'])
+@core_bp.route('/instaladores', methods=['GET'])
 @token_required
 def get_instaladores(conn):
     instaladores = instalador_model.get_all_instaladores(conn, g.user_id)
     return jsonify(instaladores)
 
-@bp.route('/instaladores/<int:instalador_id>', methods=['GET'])
+@core_bp.route('/instaladores/<int:instalador_id>', methods=['GET'])
 @token_required
 def get_instalador(conn, instalador_id):
     instalador = instalador_model.get_instalador_by_id(conn, instalador_id, g.user_id)
@@ -141,7 +141,7 @@ def get_instalador(conn, instalador_id):
         return jsonify(dict(instalador))
     return jsonify({'error': 'Instalador no encontrado o no pertenece a este usuario'}), 404
 
-@bp.route('/instaladores', methods=['POST'])
+@core_bp.route('/instaladores', methods=['POST'])
 @token_required
 def create_instalador(conn):
     data = request.json
@@ -157,7 +157,7 @@ def create_instalador(conn):
         error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
         return jsonify({'error': message}), error_code
 
-@bp.route('/instaladores/<int:instalador_id>', methods=['PUT'])
+@core_bp.route('/instaladores/<int:instalador_id>', methods=['PUT'])
 @token_required
 def update_instalador_api(conn, instalador_id):
     data = request.json
@@ -169,7 +169,7 @@ def update_instalador_api(conn, instalador_id):
         error_code = 409 if "UNIQUE" in str(message) or "ya existe" in str(message) else 400
         return jsonify({'error': message}), error_code
 
-@bp.route('/instaladores/<int:instalador_id>', methods=['DELETE'])
+@core_bp.route('/instaladores/<int:instalador_id>', methods=['DELETE'])
 @token_required
 def delete_instalador_api(conn, instalador_id):
     success, message = instalador_model.delete_instalador(conn, instalador_id, g.user_id)
@@ -178,20 +178,20 @@ def delete_instalador_api(conn, instalador_id):
     return jsonify({'error': message}), 404
 
 # --- Instalaciones ---
-@bp.route('/instalaciones', methods=['GET'])
+@core_bp.route('/instalaciones', methods=['GET'])
 @token_required
 def get_instalaciones(conn):
     ciudad_filtro = request.args.get('ciudad', None)
     instalaciones = instalacion_model.get_all_instalaciones(conn, g.user_id, ciudad=ciudad_filtro)
     return jsonify(instalaciones)
 
-@bp.route('/instalaciones/<int:instalacion_id>', methods=['GET'])
+@core_bp.route('/instalaciones/<int:instalacion_id>', methods=['GET'])
 @token_required
 def get_instalacion_detalle(conn, instalacion_id):
     instalacion = instalacion_model.get_instalacion_completa(conn, instalacion_id, g.user_id)
     return jsonify(dict(instalacion)) if instalacion else (jsonify({'error': 'Instalación no encontrada'}), 404)
 
-@bp.route('/instalaciones', methods=['POST'])
+@core_bp.route('/instalaciones', methods=['POST'])
 @token_required
 def create_instalacion(conn):
     data = request.json
@@ -222,7 +222,7 @@ def create_instalacion(conn):
         return jsonify({'error': message}), 400
 
 
-@bp.route('/instalaciones/<int:instalacion_id>', methods=['PUT'])
+@core_bp.route('/instalaciones/<int:instalacion_id>', methods=['PUT'])
 @token_required
 def update_instalacion_endpoint(conn, instalacion_id):
     data = request.json
@@ -240,7 +240,7 @@ def update_instalacion_endpoint(conn, instalacion_id):
         return jsonify({'error': 'Error interno del servidor'}), 500
 
 
-@bp.route('/instalaciones/<int:instalacion_id>', methods=['DELETE'])
+@core_bp.route('/instalaciones/<int:instalacion_id>', methods=['DELETE'])
 @token_required
 def delete_instalacion_api(conn, instalacion_id):
     try:
@@ -255,13 +255,13 @@ def delete_instalacion_api(conn, instalacion_id):
 
 
 ### CTO: VERSIÓN REFACTORIZADA Y SEGURA DE LA GENERACIÓN DE DOCUMENTOS
-@bp.route('/instalaciones/<int:instalacion_id>/generate-selected-docs', methods=['POST'])
+@core_bp.route('/instalaciones/<int:instalacion_id>/generate-docs', methods=['POST'])
 @token_required
-def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión 'conn' ahora es un argumento.
+def generate_docs_api(conn, instalacion_id):
     user_id = g.user_id
     data = request.json
     selected_doc_files = data.get('documentos', [])
-    community_slug = data.get('community_slug') # El frontend ahora nos envía la comunidad seleccionada
+    community_slug = data.get('community_slug')
 
     if not selected_doc_files:
         return jsonify({"error": "No se seleccionaron documentos para generar."}), 400
@@ -269,14 +269,12 @@ def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión
         return jsonify({"error": "No se especificó la comunidad autónoma."}), 400
 
     try:
-        # 1. Obtener todos los datos necesarios para el contexto
         instalacion_completa = instalacion_model.get_instalacion_completa(conn, instalacion_id, user_id)
         if not instalacion_completa:
             return jsonify({"error": "Instalación no encontrada o no pertenece a este usuario"}), 404
 
-        # 2. Preparar el contexto (igual que antes, pero más limpio)
         contexto_base = dict(instalacion_completa)
-        # Añadir datos de catálogo
+        # Enriquecer contexto con datos de catálogo...
         if nombre_panel := contexto_base.get('panel_solar'):
             if panel_data := catalog_model.get_panel_by_name(conn, nombre_panel):
                 contexto_base.update(dict(panel_data))
@@ -287,33 +285,25 @@ def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión
              if bateria_data := catalog_model.get_bateria_by_name(conn, nombre_bateria):
                  contexto_base.update(dict(bateria_data))
         
-        # 3. Llamar al servicio para enriquecer el contexto con cálculos
         contexto_final = doc_generator_service.prepare_document_context(contexto_base)
-
-        # 4. Generar archivos en memoria
+        
         generated_files_in_memory = []
         templates_base_path = os.path.join('templates', community_slug)
 
         for template_file_name in selected_doc_files:
             template_path = os.path.join(templates_base_path, template_file_name)
-            
             try:
-                # La generación se delega a la nueva función del servicio
                 file_bytes = doc_generator_service.generate_document(template_path, contexto_final)
-                
-                # Crear un nombre de archivo de salida "amigable"
                 base_name = os.path.splitext(template_file_name)[0].replace("_", " ").title()
                 output_filename = f"{base_name} - Inst {instalacion_id}.docx"
-                
                 generated_files_in_memory.append({"name": output_filename, "bytes": file_bytes})
             except FileNotFoundError:
-                current_app.logger.error(f"Plantilla no encontrada: {template_path}")
-                continue # Salta a la siguiente plantilla si una no existe
+                current_app.logger.warning(f"Plantilla no encontrada, se omite: {template_path}")
+                continue
 
         if not generated_files_in_memory:
-            return jsonify({"error": "No se pudieron generar los documentos seleccionados (plantillas no encontradas)."}), 500
+            return jsonify({"error": "No se pudieron generar los documentos. Las plantillas podrían no existir para la comunidad seleccionada."}), 500
 
-        # 5. Enviar respuesta como archivo único o ZIP
         if len(generated_files_in_memory) == 1:
             file_to_send = generated_files_in_memory[0]
             return send_file(io.BytesIO(file_to_send["bytes"]), mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', as_attachment=True, download_name=file_to_send["name"])
@@ -327,20 +317,20 @@ def generate_selected_docs_api(conn, instalacion_id): # ### CTO: 1. La conexión
             return send_file(zip_buffer, mimetype='application/zip', as_attachment=True, download_name=zip_filename)
 
     except Exception as e:
-        current_app.logger.error(f"Error general en generate_docs_refactored: {e}", exc_info=True)
+        current_app.logger.error(f"Error en generate_docs_api para instalación {instalacion_id}: {e}", exc_info=True)
         return jsonify({"error": "Error interno del servidor al generar documentos."}), 500
 
-@bp.route('/instalaciones/<int:instalacion_id>/document_options', methods=['GET'])
+@core_bp.route('/instalaciones/<int:instalacion_id>/document_options', methods=['GET'])
 @token_required
 def get_document_options(conn, instalacion_id):
     user_id = g.user_id
     # Usamos get_instalacion_by_id porque solo necesitamos la provincia, es más ligero.
-    instalacion = instalacion_model.get_instalacion_by_id(conn, instalacion_id, user_id) 
+    instalacion = instalacion_model.get_instalacion_completa(conn, instalacion_id, user_id) 
     if not instalacion:
         return jsonify({"error": "Instalación no encontrada"}), 404
 
     # 1. Determinar la comunidad autónoma
-    provincia = instalacion.get('provincia') # Asegúrate que 'get_instalacion_by_id' devuelve 'provincia'
+    provincia = instalacion.get('emplazamiento_provincia') # Asegúrate que 'get_instalacion_by_id' devuelve 'provincia'
     if not provincia:
         # Fallback si la instalación no tiene provincia definida
         return jsonify({
@@ -352,9 +342,7 @@ def get_document_options(conn, instalacion_id):
     community_slug = PROVINCE_TO_COMMUNITY_MAP.get(provincia, None)
 
     # 2. Obtener los documentos para esa comunidad
-    available_docs = []
-    if community_slug:
-        available_docs = doc_generator_service.get_available_docs_for_community(community_slug)
+    available_docs = doc_generator_service.get_available_docs_for_community(community_slug) if community_slug else []
 
     # 3. Devolver toda la información necesaria para el popup de Lovable
     response_data = {
@@ -365,28 +353,26 @@ def get_document_options(conn, instalacion_id):
     
     return jsonify(response_data), 200
 
-@bp.route('/documentos_por_comunidad/<string:community_slug>', methods=['GET'])
+@core_bp.route('/documentos_por_comunidad/<string:community_slug>', methods=['GET'])
 @token_required
 def get_docs_by_community(conn, community_slug):
-    # Endpoint auxiliar para que el frontend refresque la lista de documentos
-    # si el usuario cambia la comunidad en el desplegable.
     docs = doc_generator_service.get_available_docs_for_community(community_slug)
-    return jsonify({"available_docs": docs}), 200
+    return jsonify({"available_docs": docs})
 
 
-@bp.route('/clientes/<int:cliente_id>/usage', methods=['GET'])
+@core_bp.route('/clientes/<int:cliente_id>/usage', methods=['GET'])
 @token_required
 def get_cliente_usage(conn, cliente_id):
     count = cliente_model.get_usage_count(conn, cliente_id, g.user_id)
     return jsonify({'usage_count': count})
 
-@bp.route('/promotores/<int:promotor_id>/usage', methods=['GET'])
+@core_bp.route('/promotores/<int:promotor_id>/usage', methods=['GET'])
 @token_required
 def get_promotor_usage(conn, promotor_id):
     count = promotor_model.get_usage_count(conn, promotor_id, g.user_id)
     return jsonify({'usage_count': count})
 
-@bp.route('/instaladores/<int:instalador_id>/usage', methods=['GET'])
+@core_bp.route('/instaladores/<int:instalador_id>/usage', methods=['GET'])
 @token_required
 def get_instalador_usage(conn, instalador_id):
     count = instalador_model.get_usage_count(conn, instalador_id, g.user_id)
@@ -394,21 +380,21 @@ def get_instalador_usage(conn, instalador_id):
 
 
 # dependencias para eliminar instalaciones con clientes instlaadores y rpmotores
-@bp.route('/clientes/<int:cliente_id>/dependencies', methods=['GET'])
+@core_bp.route('/clientes/<int:cliente_id>/dependencies', methods=['GET'])
 @token_required
 def get_cliente_dependencies(conn, cliente_id):
     # Llama al nuevo método del modelo que devuelve la lista de descripciones.
     dependencies = cliente_model.get_dependencies(conn, cliente_id, g.user_id)
     return jsonify(dependencies)
 
-@bp.route('/promotores/<int:promotor_id>/dependencies', methods=['GET'])
+@core_bp.route('/promotores/<int:promotor_id>/dependencies', methods=['GET'])
 @token_required
 def get_promotor_dependencies(conn, promotor_id):
     # Reutilizamos el mismo patrón para los promotores.
     dependencies = promotor_model.get_dependencies(conn, promotor_id, g.user_id)
     return jsonify(dependencies)
 
-@bp.route('/instaladores/<int:instalador_id>/dependencies', methods=['GET'])
+@core_bp.route('/instaladores/<int:instalador_id>/dependencies', methods=['GET'])
 @token_required
 def get_instalador_dependencies(conn, instalador_id):
     # Y también para los instaladores, manteniendo la consistencia.
