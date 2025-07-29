@@ -260,8 +260,23 @@ def delete_instalacion_api(conn, instalacion_id):
 def generate_docs_api(conn, instalacion_id):
     user_id = g.user_id
     data = request.json
-    selected_doc_files = data.get('documentos', [])
+
+        # --- PASO 1: DEPURACIÓN Y LOGGING ---
+    # Logueamos el payload exacto que recibimos del frontend.
+    # Esto nos dirá si la lista 'documentos' contiene elementos inesperados.
+    current_app.logger.info(f"Petición para generar docs para Inst ID {instalacion_id}. Payload recibido: {data}")
+
+
+    # --- PASO 2: BLINDAJE DE LA ENTRADA ---
+    # Obtenemos la lista de documentos y la limpiamos, eliminando cualquier
+    # string vacío o valor nulo que el frontend pudiera enviar por error.
+    selected_doc_files_raw = data.get('documentos', [])
+    selected_doc_files = [doc for doc in selected_doc_files_raw if doc] # Filtra strings vacíos y None
+
     community_slug = data.get('community_slug')
+
+    # Logueamos la lista ya limpia para comparar.
+    current_app.logger.info(f"Lista de documentos limpia para procesar: {selected_doc_files}")
 
     if not selected_doc_files:
         return jsonify({"error": "No se seleccionaron documentos para generar."}), 400
@@ -293,26 +308,44 @@ def generate_docs_api(conn, instalacion_id):
         for template_file_name in selected_doc_files:
             template_path = os.path.join(templates_base_path, template_file_name)
             try:
+                # La generación con docxtpl ya funciona.
                 file_bytes = doc_generator_service.generate_document(template_path, contexto_final)
+                
+                # Creamos un diccionario con toda la info necesaria para la respuesta.
                 base_name = os.path.splitext(template_file_name)[0].replace("_", " ").title()
                 output_filename = f"{base_name} - Inst {instalacion_id}.docx"
-                generated_files_in_memory.append({"name": output_filename, "bytes": file_bytes})
+                
+                generated_files_in_memory.append({
+                    "name": output_filename, 
+                    "bytes": file_bytes,
+                    "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                })
             except FileNotFoundError:
                 current_app.logger.warning(f"Plantilla no encontrada, se omite: {template_path}")
                 continue
+            except Exception as e:
+                current_app.logger.error(f"Error procesando plantilla {template_file_name}: {e}", exc_info=True)
+                continue
+        
+        # Logueamos cuántos documentos se generaron realmente.
+        current_app.logger.info(f"Generados {len(generated_files_in_memory)} documentos en memoria.")
+
 
         if not generated_files_in_memory:
             return jsonify({"error": "No se pudieron generar los documentos. Las plantillas podrían no existir para la comunidad seleccionada."}), 500
 
+        # --- PASO 4: LÓGICA DE RESPUESTA CORREGIDA Y EXPLÍCITA ---
         if len(generated_files_in_memory) == 1:
             file_to_send = generated_files_in_memory[0]
+            current_app.logger.info(f"Enviando 1 archivo: {file_to_send['name']} con mimetype {file_to_send['mimetype']}")
             return send_file(
-                io.BytesIO(file_to_send["bytes"]), 
-                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-                as_attachment=True, 
+                io.BytesIO(file_to_send["bytes"]),
+                mimetype=file_to_send["mimetype"],
+                as_attachment=True,
                 download_name=file_to_send["name"]
             )
         else:
+            current_app.logger.info(f"Enviando {len(generated_files_in_memory)} archivos en un ZIP.")
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
                 for file_info in generated_files_in_memory:
@@ -320,9 +353,9 @@ def generate_docs_api(conn, instalacion_id):
             zip_buffer.seek(0)
             zip_filename = f"Documentacion Inst {instalacion_id}.zip"
             return send_file(
-                zip_buffer, 
-                mimetype='application/zip', 
-                as_attachment=True, 
+                zip_buffer,
+                mimetype='application/zip',
+                as_attachment=True,
                 download_name=zip_filename
             )
 
