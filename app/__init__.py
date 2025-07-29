@@ -28,7 +28,7 @@ def create_app(test_config=None):
     # El app_context es necesario para que los blueprints puedan registrarse
     with app.app_context():
         # --- Importar y Registrar Blueprints ---
-        from .routes.core_routes import bp as core_bp
+        from .routes.core_routes import core_bp 
         from .routes.calculator_routes import bp as calculator_bp
         from .routes.catalog_routes import bp as catalog_bp
         from .routes.utility_routes import bp as utility_bp # <-- El nuevo
