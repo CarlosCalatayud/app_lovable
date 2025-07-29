@@ -32,10 +32,9 @@ def create_app(test_config=None):
         resources={r"/api/*": {"origins": origins}},
         # methods especifica los verbos HTTP permitidos.
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        # allow_headers es la lista blanca de cabeceras. Es crucial y correcta.
-        allow_headers=["Content-Type", "Authorization", "Referrer-Policy"],
         # supports_credentials es necesario si en el futuro usas cookies o sesiones.
-        supports_credentials=True 
+        allow_headers="*",
+        supports_credentials=True
     )
 
     # Configuración de la aplicación desde variables de entorno o un objeto
