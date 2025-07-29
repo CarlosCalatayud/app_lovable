@@ -11,14 +11,31 @@ def create_app(test_config=None):
     """
     app = Flask(__name__, instance_relative_config=True)
     
+        # El valor debe ser una cadena de URLs separadas por comas.
+    # Ej: "https://preview.app.com,https://prod.app.com"
+    allowed_origins_str = os.environ.get('ALLOWED_ORIGINS')
+
+    if allowed_origins_str:
+        # Si la variable de entorno está definida (PRODUCCIÓN), la usamos.
+        origins = [origin.strip() for origin in allowed_origins_str.split(',')]
+    else:
+        # Si no (DESARROLLO LOCAL), permitimos cualquier origen para facilitar las pruebas.
+        origins = "*"
+        app.logger.warning("La variable de entorno ALLOWED_ORIGINS no está definida. CORS está configurado para permitir todos los orígenes. NO USAR EN PRODUCCIÓN.")
+
     # Configuración de CORS
     # Esto permite explícitamente el origen de preview de Lovable,
     # el Content-Type para JSON y la cabecera de Authorization.
     CORS(
         app,
-        resources={r"/api/*": {"origins": "*"}}, # Permitir todos los orígenes por ahora
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], # Permitir todos los métodos comunes
-        allow_headers=["Content-Type", "Authorization"] # Permitir las cabeceras necesarias
+        # resources aplica la configuración a todas las rutas bajo /api/
+        resources={r"/api/*": {"origins": origins}},
+        # methods especifica los verbos HTTP permitidos.
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        # allow_headers es la lista blanca de cabeceras. Es crucial y correcta.
+        allow_headers=["Content-Type", "Authorization", "Referrer-Policy"],
+        # supports_credentials es necesario si en el futuro usas cookies o sesiones.
+        supports_credentials=True 
     )
 
     # Configuración de la aplicación desde variables de entorno o un objeto
