@@ -69,6 +69,46 @@ def prepare_document_context(context: dict) -> dict:
     ctx = context.copy()
     calculated_data = {}
 
+    # --- SECCIÓN 1: FORMATEO DE DATOS Y REUTILIZACIÓN ---
+    
+    # Formato de Fecha de Finalización
+    fecha_fin_str = _get_input(ctx, 'fecha_finalizacion')
+    if fecha_fin_str:
+        try:
+            fecha_fin = datetime.datetime.strptime(fecha_fin_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            fecha_fin = datetime.date.today()
+    else:
+        fecha_fin = datetime.date.today()
+
+    meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    calculated_data['fecha_finalizacion_formateada'] = f"{fecha_fin.day} de {meses[fecha_fin.month - 1]} de {fecha_fin.year}"
+    
+    # Formato de Dirección de Emplazamiento
+    dir_parts = [
+        ctx.get('emplazamiento_nombre_via', ''),
+        ctx.get('emplazamiento_numero_via', ''),
+        ctx.get('emplazamiento_piso_puerta', '')
+    ]
+    direccion_str = ' '.join(filter(None, dir_parts)).strip()
+    localidad = ctx.get('emplazamiento_localidad', '')
+    provincia = ctx.get('emplazamiento_provincia', '')
+    if direccion_str and localidad:
+        calculated_data['direccion_emplazamiento_completa'] = f"{direccion_str}, {localidad} ({provincia})"
+    elif localidad:
+        calculated_data['direccion_emplazamiento_completa'] = f"{localidad} ({provincia})"
+    else:
+        calculated_data['direccion_emplazamiento_completa'] = provincia or "No especificada"
+        
+    # Lógica de Reutilización para el Técnico Instalador
+    # Si en el futuro se añaden campos de técnico, esta lógica se puede eliminar
+    # y los placeholders usarían las variables directas.
+    calculated_data['instalador_tecnico_nombre'] = ctx.get('instalador_empresa', 'Técnico no especificado')
+    calculated_data['instalador_tecnico_dni'] = ctx.get('instalador_cif', 'DNI no especificado')
+    # Añadimos alias explícitos para el resto, para máxima claridad en las plantillas.
+    calculated_data['instalador_cif_empresa'] = ctx.get('instalador_cif', '')
+    calculated_data['instalador_tecnico_competencia'] = ctx.get('instalador_competencia', '')
+
     # --- Cálculos basados en datos del Panel ---
     cantidad_paneles = _get_input(ctx, 'numero_paneles', 0, int)
     potencia_pico_panel = _get_input(ctx, 'potencia_pico_w', 0, int)
