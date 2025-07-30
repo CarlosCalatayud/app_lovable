@@ -117,14 +117,25 @@ def prepare_document_context(context: dict) -> dict:
     else:
         calculated_data['promotor_direccion_completa'] = "No especificada"
 
+    # --- INICIO DE LOGGING PARA DEBUGGING ---
+    logging.info(f"--- DEBUGGING DIRECCIÓN INSTALADOR ---")
+    logging.info(f"instalador_nombre_via: {ctx.get('instalador_nombre_via')}")
+    logging.info(f"instalador_numero_via: {ctx.get('instalador_numero_via')}")
+    logging.info(f"instalador_piso_puerta: {ctx.get('instalador_piso_puerta')}")
+    logging.info(f"instalador_localidad: {ctx.get('instalador_localidad')}")
+    logging.info(f"instalador_provincia: {ctx.get('instalador_provincia')}")
+    logging.info(f"--- FIN DEBUGGING ---")
+    # --- FIN DE LOGGING PARA DEBUGGING ---
+    
     # Formateo de Dirección del Instalador
     dir_inst_parts = [ctx.get('instalador_nombre_via', ''), ctx.get('instalador_numero_via', ''), ctx.get('instalador_piso_puerta', '')]
     dir_inst_str = ' '.join(filter(None, dir_inst_parts)).strip()
     loc_inst = ctx.get('instalador_localidad', '')
-    instalador_prov = ctx.get('instalador_provincia')
-    calculated_data['instalador_provincia'] = instalador_prov or 'Provincia no especificada'
+    prov_inst = ctx.get('instalador_provincia', '')
     if dir_inst_str and loc_inst:
-        calculated_data['instalador_direccion_completa'] = f"{dir_inst_str}, {loc_inst} ({instalador_prov})"
+        calculated_data['instalador_direccion_completa'] = f"{dir_inst_str}, {loc_inst} ({prov_inst})"
+    elif loc_inst: # Si solo tenemos localidad/provincia
+        calculated_data['instalador_direccion_completa'] = f"{loc_inst} ({prov_inst})"
     else:
         calculated_data['instalador_direccion_completa'] = "No especificada"
     
@@ -138,10 +149,26 @@ def prepare_document_context(context: dict) -> dict:
     calculated_data['instalador_tecnico_nombre'] = ctx.get('instalador_empresa', 'Técnico no especificado')
     calculated_data['instalador_tecnico_dni'] = ctx.get('instalador_cif', 'DNI no especificado')
     # Añadimos alias explícitos para el resto, para máxima claridad en las plantillas.
-    calculated_data['instalador_cif_empresa'] = ctx.get('instalador_cif', '')
     calculated_data['instalador_tecnico_competencia'] = ctx.get('instalador_competencia', '')
+    calculated_data['instalador_cif_empresa'] = ctx.get('instalador_cif', '')
+    calculated_data['instalador_numero_colegiado'] = ctx.get('numero_colegiado_o_instalador', '')
+    # Cableado
+    calculated_data['cable_dc_material'] = ctx.get('material_cable_dc', 'Cobre')
+    calculated_data['cable_dc_seccion'] = ctx.get('seccion_cable_dc_mm2')
+    calculated_data['cable_dc_longitud'] = ctx.get('longitud_cable_dc_m')
+    calculated_data['cable_ac_material'] = ctx.get('material_cable_ac', 'Cobre')
+    calculated_data['cable_ac_seccion'] = ctx.get('seccion_cable_ac_mm2')
+    calculated_data['cable_ac_longitud'] = ctx.get('longitud_cable_ac_m')
 
-        # Formateo de Dirección del Hospital Cercano
+    # Protecciones
+    calculated_data['fusible_cc_a'] = ctx.get('fusible_cc_a', 15) # Nuevo campo
+    calculated_data['protector_sobretensiones_v'] = ctx.get('protector_sobretensiones', '1000V') # Campo existente
+    calculated_data['magnetotermico_a'] = ctx.get('magnetotermico_ac_a', 25) # Nuevo campo
+    calculated_data['diferencialA'] = ctx.get('diferencial_a') # Campo existente
+    calculated_data['sensibilidadMa'] = ctx.get('sensibilidad_ma') # Campo existente
+
+
+    # Formateo de Dirección del Hospital Cercano
     if ctx.get('hospital_nombre'):
         dir_hosp_parts = [
             ctx.get('hospital_nombre_via', ''),

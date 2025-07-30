@@ -33,3 +33,8 @@ def get_catalog_data(conn, catalog_name):
     
     current_app.logger.info(f"Obtenidos {len(items)} items para el catálogo público '{catalog_name}'.")
     return jsonify(items)
+
+@bp.route('/tipos_estructura', methods=['GET'])
+def get_tipos_estructura(conn):
+    items = catalog_model.get_public_catalog_items(conn, 'tipos_estructura')
+    return jsonify(items)

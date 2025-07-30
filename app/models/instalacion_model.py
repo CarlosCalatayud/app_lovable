@@ -53,6 +53,7 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             -- Datos del Cliente
             c.nombre AS cliente_nombre, c.apellidos AS cliente_apellidos, c.dni AS cliente_dni,
             c.email AS cliente_email, c.telefono_contacto AS cliente_telefono,
+            
             -- Datos del Promotor
             dir_prom.nombre_via AS promotor_nombre_via,
             dir_prom.numero_via AS promotor_numero_via,
@@ -62,12 +63,14 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
 
             p.nombre_razon_social AS promotor_nombre, p.dni_cif AS promotor_cif,
             p.email AS promotor_email, p.telefono_contacto AS promotor_telefono,
+            
             -- Datos del Instalador
             inst.nombre_empresa AS instalador_empresa, inst.cif_empresa AS instalador_cif,
             inst.email AS instalador_email, inst.telefono_contacto AS instalador_telefono,
             inst.competencia AS instalador_competencia, inst.numero_colegiado_o_instalador, inst.numero_registro_industrial,
             inst.nombre_completo_instalador,
             dir_inst.provincia AS instalador_provincia, -- Alias único y explícito
+            
             -- Dirección de Emplazamiento (Completa)
             dir_emp.tipo_via_id AS emplazamiento_tipo_via_id,
             dir_emp.nombre_via AS emplazamiento_nombre_via,
@@ -76,6 +79,7 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             dir_emp.codigo_postal AS emplazamiento_codigo_postal,
             dir_emp.localidad AS emplazamiento_localidad,
             dir_emp.provincia AS emplazamiento_provincia,
+            
             -- Hospital Cercano (Completo)
             h.nombre as hospital_nombre,
             dir_hosp.tipo_via_id as hospital_tipo_via_id,
@@ -85,16 +89,28 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             dir_hosp.codigo_postal as hospital_codigo_postal,
             dir_hosp.localidad as hospital_localidad,
             dir_hosp.provincia as hospital_provincia,
+            
             -- Nombres de Catálogos para los desplegables
-            ps.nombre_panel AS panel_solar_nombre,
-            ps.potencia_pico_w AS potencia_pico_w, -- Obtener potencia del panel
-            ps.largo_mm AS largo_mm,               -- Obtener largo del panel
-            ps.ancho_mm AS ancho_mm,               -- Obtener ancho del panel
-            ps.peso_kg AS peso_kg,                 -- Obtener peso del panel
+            -- Paneles Solares (DATOS AMPLIADOS)
+            ps.nombre_panel AS panel_solar_nombre, ps.potencia_pico_w, ps.largo_mm, ps.ancho_mm, ps.peso_kg,
+            ps.tecnologia AS panel_tecnologia, ps.numero_celulas AS panel_numero_celulas,
+            ps.profundidad_mm AS panel_profundidad_mm, ps.tension_circuito_abierto_voc AS panel_tension_voc,
+            ps.eficiencia_panel_porcentaje AS panel_eficiencia,
+            
+            -- Inversores (DATOS AMPLIADOS)
             inv.nombre_inversor AS inversor_nombre,
+            inv.potencia_salida_va AS inversor_potencia_salida_va, inv.tecnologia AS inversor_tecnologia,
+            inv.largo_mm AS inversor_largo_mm, inv.ancho_mm AS inversor_ancho_mm,
+            inv.profundo_mm AS inversor_profundo_mm, inv.peso_kg AS inversor_peso_kg,
+            inv.proteccion_ip AS inversor_proteccion_ip, inv.potencia_max_paneles_w AS inversor_potencia_max_w,
+            inv.tension_max_entrada_v AS inversor_tension_max_v,
+
+            -- Baterias
             b.nombre_bateria AS bateria_nombre, d.nombre_distribuidora AS distribuidora_nombre,
+            
             ti.nombre as tipo_instalacion_nombre, tc.nombre as tipo_cubierta_nombre,
             tf.nombre_tipo_finca AS tipo_finca_nombre
+            te.nombre AS tipo_estructura_nombre
         FROM instalaciones i
         LEFT JOIN clientes c ON i.cliente_id = c.id
         LEFT JOIN promotores p ON i.promotor_id = p.id
@@ -111,6 +127,7 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
         LEFT JOIN tipos_finca tf ON i.tipo_finca_id = tf.id
         LEFT JOIN tipos_instalacion ti ON i.tipo_instalacion_id = ti.id
         LEFT JOIN tipos_cubierta tc ON i.tipo_cubierta_id = tc.id
+        LEFT JOIN tipos_estructura te ON i.tipo_estructura_id = te.id
         WHERE i.id = %s AND i.app_user_id = %s;
     """
     
