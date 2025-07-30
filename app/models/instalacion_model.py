@@ -67,6 +67,7 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             inst.email AS instalador_email, inst.telefono_contacto AS instalador_telefono,
             inst.competencia AS instalador_competencia, inst.numero_colegiado_o_instalador, inst.numero_registro_industrial,
             inst.nombre_completo_instalador,
+            dir_inst.provincia AS instalador_provincia, -- Alias único y explícito
             -- Dirección de Emplazamiento (Completa)
             dir_emp.tipo_via_id AS emplazamiento_tipo_via_id,
             dir_emp.nombre_via AS emplazamiento_nombre_via,
@@ -85,7 +86,12 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             dir_hosp.localidad as hospital_localidad,
             dir_hosp.provincia as hospital_provincia,
             -- Nombres de Catálogos para los desplegables
-            ps.nombre_panel AS panel_solar_nombre, inv.nombre_inversor AS inversor_nombre,
+            ps.nombre_panel AS panel_solar_nombre,
+            ps.potencia_pico_w AS potencia_pico_w, -- Obtener potencia del panel
+            ps.largo_mm AS largo_mm,               -- Obtener largo del panel
+            ps.ancho_mm AS ancho_mm,               -- Obtener ancho del panel
+            ps.peso_kg AS peso_kg,                 -- Obtener peso del panel
+            inv.nombre_inversor AS inversor_nombre,
             b.nombre_bateria AS bateria_nombre, d.nombre_distribuidora AS distribuidora_nombre,
             ti.nombre as tipo_instalacion_nombre, tc.nombre as tipo_cubierta_nombre,
             tf.nombre_tipo_finca AS tipo_finca_nombre
