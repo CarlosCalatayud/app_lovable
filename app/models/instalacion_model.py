@@ -92,8 +92,8 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
         LEFT JOIN clientes c ON i.cliente_id = c.id
         LEFT JOIN promotores p ON i.promotor_id = p.id
         LEFT JOIN direcciones dir_prom ON p.direccion_fiscal_id = dir_prom.id -- JOIN para dirección del promotor
-        LEFT JOIN direcciones dir_inst ON inst.direccion_empresa_id = dir_inst.id -- JOIN para dirección del instalador
         LEFT JOIN instaladores inst ON i.instalador_id = inst.id
+        LEFT JOIN direcciones dir_inst ON inst.direccion_empresa_id = dir_inst.id -- JOIN para dirección del instalador
         LEFT JOIN direcciones dir_emp ON i.direccion_emplazamiento_id = dir_emp.id
         LEFT JOIN hospitales_cercanos h ON i.hospital_cercano_id = h.id
         LEFT JOIN direcciones dir_hosp ON h.direccion_id = dir_hosp.id
