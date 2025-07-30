@@ -141,6 +141,27 @@ def prepare_document_context(context: dict) -> dict:
     calculated_data['instalador_cif_empresa'] = ctx.get('instalador_cif', '')
     calculated_data['instalador_tecnico_competencia'] = ctx.get('instalador_competencia', '')
 
+        # Formateo de Dirección del Hospital Cercano
+    if ctx.get('hospital_nombre'):
+        dir_hosp_parts = [
+            ctx.get('hospital_nombre_via', ''),
+            ctx.get('hospital_numero_via', ''),
+            ctx.get('hospital_piso_puerta', '')
+        ]
+        dir_hosp_str = ' '.join(filter(None, dir_hosp_parts)).strip()
+        loc_hosp = ctx.get('hospital_localidad', '')
+        prov_hosp = ctx.get('hospital_provincia', '')
+        
+        if dir_hosp_str and loc_hosp:
+            calculated_data['hospital_direccion_completa'] = f"{dir_hosp_str}, {loc_hosp} ({prov_hosp})"
+        elif loc_hosp:
+             calculated_data['hospital_direccion_completa'] = f"{loc_hosp} ({prov_hosp})"
+        else:
+            calculated_data['hospital_direccion_completa'] = prov_hosp or "Dirección no especificada"
+    else:
+        # Si no hay hospital, definimos un valor por defecto para que no dé error en la plantilla
+        calculated_data['hospital_direccion_completa'] = "No aplicable"
+
     # --- Cálculos basados en datos del Panel ---
     cantidad_paneles = _get_input(ctx, 'numero_paneles', 0, int)
     potencia_pico_panel = _get_input(ctx, 'potencia_pico_w', 0, int)
@@ -150,7 +171,8 @@ def prepare_document_context(context: dict) -> dict:
 
     potencia_pico_total_w = cantidad_paneles * potencia_pico_panel
     calculated_data['potenciaPicoW'] = potencia_pico_total_w
-    
+
+
     # Logging de los valores de entrada
     logging.info(f"--- INICIO CÁLCULOS ESTRUCTURALES PARA INSTALACIÓN ---")
     logging.info(f"Datos de entrada: Cantidad Paneles={cantidad_paneles}, Largo Panel={largo_panel}mm, Ancho Panel={ancho_panel}mm, Peso Panel={peso_panel}kg")
