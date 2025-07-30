@@ -66,6 +66,7 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             inst.nombre_empresa AS instalador_empresa, inst.cif_empresa AS instalador_cif,
             inst.email AS instalador_email, inst.telefono_contacto AS instalador_telefono,
             inst.competencia AS instalador_competencia, inst.numero_colegiado_o_instalador, inst.numero_registro_industrial,
+            inst.nombre_completo_instalador,
             -- Dirección de Emplazamiento (Completa)
             dir_emp.tipo_via_id AS emplazamiento_tipo_via_id,
             dir_emp.nombre_via AS emplazamiento_nombre_via,

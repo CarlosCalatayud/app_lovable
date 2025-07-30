@@ -130,6 +130,9 @@ def prepare_document_context(context: dict) -> dict:
     # Lógica de Reutilización para el Técnico Instalador
     # Si en el futuro se añaden campos de técnico, esta lógica se puede eliminar
     # y los placeholders usarían las variables directas.
+    nombre_tecnico_real = ctx.get('nombre_completo_instalador')
+    
+    calculated_data['nombre_completo_instalador'] = nombre_tecnico_real or 'No especificado' # Variable directa para la plantilla
     calculated_data['instalador_tecnico_nombre'] = ctx.get('instalador_empresa', 'Técnico no especificado')
     calculated_data['instalador_tecnico_dni'] = ctx.get('instalador_cif', 'DNI no especificado')
     # Añadimos alias explícitos para el resto, para máxima claridad en las plantillas.

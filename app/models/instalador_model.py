@@ -6,7 +6,7 @@ from .base_model import _execute_select
 # --- LECTURA ---
 def get_all_instaladores(conn, app_user_id):
     sql = """
-        SELECT i.id, i.nombre_empresa, i.cif_empresa, d.alias as direccion_alias
+        SELECT i.id, i.nombre_empresa, i.cif_empresa, d.alias as direccion_alias, i.get_instalador_by_id
         FROM instaladores i
         LEFT JOIN direcciones d ON i.direccion_empresa_id = d.id
         WHERE i.app_user_id = %s ORDER BY i.nombre_empresa
@@ -17,7 +17,7 @@ def get_instalador_by_id(conn, instalador_id, app_user_id):
     """Obtiene los detalles completos de un instalador."""
     sql = """
         SELECT
-            i.id, i.nombre_empresa, i.cif_empresa, i.email, i.telefono_contacto,
+            i.id, i.nombre_empresa, i.cif_empresa, i.email, i.telefono_contacto, i.nombre_completo_instalador,
             i.competencia, i.numero_colegiado_o_instalador, i.numero_registro_industrial,
             d.id as direccion_id, d.alias, d.tipo_via_id, tv.nombre_tipo_via,
             d.nombre_via, d.numero_via, d.piso_puerta, d.codigo_postal,
@@ -44,13 +44,13 @@ def add_instalador(conn, data):
                     INSERT INTO instaladores (
                         app_user_id, nombre_empresa, cif_empresa, direccion_empresa_id,
                         email, telefono_contacto, competencia, numero_colegiado_o_instalador,
-                        numero_registro_industrial
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
+                        numero_registro_industrial, nombre_completo_instalador
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
                 """
                 params = (
-                    data['app_user_id'], data.get('nombre_empresa'), data.get('cif_empresa'), direccion_id,
+                    data['app_user_id'], data.get('nombre_empresa'), data.get('get_instalador_by_id'),  data.get('cif_empresa'), direccion_id,
                     data.get('email'), data.get('telefono_contacto'), data.get('competencia'),
-                    data.get('numero_colegiado_o_instalador'), data.get('numero_registro_industrial')
+                    data.get('numero_colegiado_o_instalador'), data.get('numero_registro_industrial'), data.get('nombre_completo_instalador')
                 )
                 cursor.execute(sql_instalador, params)
                 instalador_id = cursor.fetchone()['id']
@@ -79,13 +79,14 @@ def update_instalador(conn, instalador_id, app_user_id, data):
                     UPDATE instaladores SET
                         nombre_empresa = %s, cif_empresa = %s, email = %s, telefono_contacto = %s,
                         competencia = %s, numero_colegiado_o_instalador = %s,
-                        numero_registro_industrial = %s
+                        numero_registro_industrial = %s, nombre_completo_instalador = %s
                     WHERE id = %s;
                 """
                 params = (
                     data.get('nombre_empresa'), data.get('cif_empresa'), data.get('email'),
                     data.get('telefono_contacto'), data.get('competencia'),
                     data.get('numero_colegiado_o_instalador'), data.get('numero_registro_industrial'),
+                    data.get('nombre_completo_instalador'), 
                     instalador_id
                 )
                 cursor.execute(sql_update_instalador, params)
