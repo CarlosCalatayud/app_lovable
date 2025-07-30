@@ -6,7 +6,12 @@ from .base_model import _execute_select
 # --- LECTURA ---
 def get_all_instaladores(conn, app_user_id):
     sql = """
-        SELECT i.id, i.nombre_empresa, i.cif_empresa, d.alias as direccion_alias, i.get_instalador_by_id
+        SELECT
+            i.id,
+            i.nombre_empresa,
+            i.cif_empresa,
+            i.nombre_completo_instalador, -- <<-- AÑADIDO CORRECTAMENTE
+            d.alias as direccion_alias
         FROM instaladores i
         LEFT JOIN direcciones d ON i.direccion_empresa_id = d.id
         WHERE i.app_user_id = %s ORDER BY i.nombre_empresa
