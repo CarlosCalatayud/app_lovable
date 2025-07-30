@@ -54,6 +54,12 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             c.nombre AS cliente_nombre, c.apellidos AS cliente_apellidos, c.dni AS cliente_dni,
             c.email AS cliente_email, c.telefono_contacto AS cliente_telefono,
             -- Datos del Promotor
+            dir_prom.nombre_via AS promotor_nombre_via,
+            dir_prom.numero_via AS promotor_numero_via,
+            dir_prom.piso_puerta AS promotor_piso_puerta,
+            dir_prom.localidad AS promotor_localidad,
+            dir_prom.provincia AS promotor_provincia,
+
             p.nombre_razon_social AS promotor_nombre, p.dni_cif AS promotor_cif,
             p.email AS promotor_email, p.telefono_contacto AS promotor_telefono,
             -- Datos del Instalador
@@ -85,6 +91,8 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
         FROM instalaciones i
         LEFT JOIN clientes c ON i.cliente_id = c.id
         LEFT JOIN promotores p ON i.promotor_id = p.id
+        LEFT JOIN direcciones dir_prom ON p.direccion_fiscal_id = dir_prom.id -- JOIN para dirección del promotor
+        LEFT JOIN direcciones dir_inst ON inst.direccion_empresa_id = dir_inst.id -- JOIN para dirección del instalador
         LEFT JOIN instaladores inst ON i.instalador_id = inst.id
         LEFT JOIN direcciones dir_emp ON i.direccion_emplazamiento_id = dir_emp.id
         LEFT JOIN hospitales_cercanos h ON i.hospital_cercano_id = h.id

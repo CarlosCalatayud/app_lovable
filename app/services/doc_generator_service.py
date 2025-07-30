@@ -71,6 +71,12 @@ def prepare_document_context(context: dict) -> dict:
 
     # --- SECCIÓN 1: FORMATEO DE DATOS Y REUTILIZACIÓN ---
     
+    # Fecha Actual para la portada
+    hoy = datetime.date.today()
+    calculated_data['dia_actual'] = hoy.strftime('%d')
+    calculated_data['mes_actual'] = hoy.strftime('%m')
+    calculated_data['anio_actual'] = hoy.strftime('%Y')
+    
     # Formato de Fecha de Finalización
     fecha_fin_str = _get_input(ctx, 'fecha_finalizacion')
     if fecha_fin_str:
@@ -99,7 +105,28 @@ def prepare_document_context(context: dict) -> dict:
         calculated_data['direccion_emplazamiento_completa'] = f"{localidad} ({provincia})"
     else:
         calculated_data['direccion_emplazamiento_completa'] = provincia or "No especificada"
-        
+
+        # Formateo de Dirección del Promotor
+    dir_prom_parts = [ctx.get('promotor_nombre_via', ''), ctx.get('promotor_numero_via', ''), ctx.get('promotor_piso_puerta', '')]
+    dir_prom_str = ' '.join(filter(None, dir_prom_parts)).strip()
+    loc_prom = ctx.get('promotor_localidad', '')
+    prov_prom = ctx.get('promotor_provincia', '')
+    if dir_prom_str and loc_prom:
+        calculated_data['promotor_direccion_completa'] = f"{dir_prom_str}, {loc_prom} ({prov_prom})"
+    else:
+        calculated_data['promotor_direccion_completa'] = "No especificada"
+
+    # Formateo de Dirección del Instalador
+    dir_inst_parts = [ctx.get('instalador_nombre_via', ''), ctx.get('instalador_numero_via', ''), ctx.get('instalador_piso_puerta', '')]
+    dir_inst_str = ' '.join(filter(None, dir_inst_parts)).strip()
+    loc_inst = ctx.get('instalador_localidad', '')
+    prov_inst = ctx.get('instalador_provincia', '')
+    if dir_inst_str and loc_inst:
+        calculated_data['instalador_direccion_completa'] = f"{dir_inst_str}, {loc_inst} ({prov_inst})"
+    else:
+        calculated_data['instalador_direccion_completa'] = "No especificada"
+
+
     # Lógica de Reutilización para el Técnico Instalador
     # Si en el futuro se añaden campos de técnico, esta lógica se puede eliminar
     # y los placeholders usarían las variables directas.
