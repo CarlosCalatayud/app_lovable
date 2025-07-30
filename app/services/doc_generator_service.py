@@ -125,6 +125,8 @@ def prepare_document_context(context: dict) -> dict:
         calculated_data['instalador_direccion_completa'] = f"{dir_inst_str}, {loc_inst} ({prov_inst})"
     else:
         calculated_data['instalador_direccion_completa'] = "No especificada"
+    
+    calculated_data['instalador_provincia'] = prov_inst or ''
 
 
     # Lógica de Reutilización para el Técnico Instalador
