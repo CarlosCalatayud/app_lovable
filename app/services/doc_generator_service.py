@@ -1,4 +1,5 @@
-# src/generation/doc_generator.py
+
+import logging# src/generation/doc_generator.py
 from docxtpl import DocxTemplate
 import os, io, zipfile
 import datetime # Puede que no sea necesario si la fecha ya está en el context_dict
@@ -120,14 +121,13 @@ def prepare_document_context(context: dict) -> dict:
     dir_inst_parts = [ctx.get('instalador_nombre_via', ''), ctx.get('instalador_numero_via', ''), ctx.get('instalador_piso_puerta', '')]
     dir_inst_str = ' '.join(filter(None, dir_inst_parts)).strip()
     loc_inst = ctx.get('instalador_localidad', '')
-    prov_inst = ctx.get('instalador_provincia', '')
+    instalador_prov = ctx.get('instalador_provincia')
+    calculated_data['instalador_provincia'] = instalador_prov or 'Provincia no especificada'
     if dir_inst_str and loc_inst:
-        calculated_data['instalador_direccion_completa'] = f"{dir_inst_str}, {loc_inst} ({prov_inst})"
+        calculated_data['instalador_direccion_completa'] = f"{dir_inst_str}, {loc_inst} ({instalador_prov})"
     else:
         calculated_data['instalador_direccion_completa'] = "No especificada"
     
-    calculated_data['instalador_provincia'] = prov_inst or ''
-
 
     # Lógica de Reutilización para el Técnico Instalador
     # Si en el futuro se añaden campos de técnico, esta lógica se puede eliminar
@@ -151,23 +151,40 @@ def prepare_document_context(context: dict) -> dict:
     potencia_pico_total_w = cantidad_paneles * potencia_pico_panel
     calculated_data['potenciaPicoW'] = potencia_pico_total_w
     
+    # Logging de los valores de entrada
+    logging.info(f"--- INICIO CÁLCULOS ESTRUCTURALES PARA INSTALACIÓN ---")
+    logging.info(f"Datos de entrada: Cantidad Paneles={cantidad_paneles}, Largo Panel={largo_panel}mm, Ancho Panel={ancho_panel}mm, Peso Panel={peso_panel}kg")
+
+
+    # Cálculo de Superficie
     if largo_panel > 0 and ancho_panel > 0:
         superficie_panel_m2 = (largo_panel / 1000) * (ancho_panel / 1000)
-        calculated_data['superficieConstruidaM2'] = round(cantidad_paneles * superficie_panel_m2, 2)
+        superficieConstruidaM2 = round(cantidad_paneles * superficie_panel_m2, 2)
     else:
-        calculated_data['superficieConstruidaM2'] = 0
+        superficieConstruidaM2 = 0
+    calculated_data['superficieConstruidaM2'] = superficieConstruidaM2
+    logging.info(f"Cálculo de Superficie: superficieConstruidaM2 = {superficieConstruidaM2} m^2")
 
-    # --- Cálculos de Peso y Carga ---
-    # Asumimos un peso de estructura de 2 kg por panel como ejemplo.
-    # Podrías añadir 'peso_estructura_panel' como un campo en el formulario.
+    # Cálculo de Carga
     peso_total_paneles = cantidad_paneles * peso_panel
-    peso_total_estructura = cantidad_paneles * 2 
-    calculated_data['pesoEstructuraKg'] = round(peso_total_paneles + peso_total_estructura, 2)
+    peso_total_estructura = cantidad_paneles * 2 # Asumimos 2kg por panel
+    pesoEstructuraKg = round(peso_total_paneles + peso_total_estructura, 2)
     
-    if calculated_data['superficieConstruidaM2'] > 0:
-        calculated_data['densidadDeCarga'] = round(calculated_data['pesoEstructuraKg'] / calculated_data['superficieConstruidaM2'], 2)
-    else:
-        calculated_data['densidadDeCarga'] = 0
+    # Inicializamos las variables de densidad a 0
+    densidadDeCarga = 0
+    densidadDeCargaKNm2 = 0
+
+    if superficieConstruidaM2 > 0:
+        densidadDeCarga = round(pesoEstructuraKg / superficieConstruidaM2, 2)
+        # Aseguramos que el valor de kN/m2 solo se calcula si la densidad no es cero
+        if densidadDeCarga > 0:
+            densidadDeCargaKNm2 = round((densidadDeCarga * 9.807) / 1000, 2)
+            
+    calculated_data['densidadDeCarga'] = densidadDeCarga
+    calculated_data['densidadDeCargaKNm2'] = densidadDeCargaKNm2 if densidadDeCargaKNm2 > 0 else '' # <<-- CORRECCIÓN CLAVE
+
+    logging.info(f"Cálculo de Carga: Peso Total={pesoEstructuraKg}kg, densidadDeCarga = {densidadDeCarga} kg/m^2, densidadDeCargaKNm2 = {densidadDeCargaKNm2} kN/m^2")
+    logging.info(f"--- FIN CÁLCULOS ESTRUCTURALES ---")
 
     # --- Textos Descriptivos ---
     nombre_bateria = _get_input(context, 'bateria', default='')
