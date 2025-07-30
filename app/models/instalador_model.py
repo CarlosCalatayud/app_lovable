@@ -44,6 +44,7 @@ def add_instalador(conn, data):
                 sql_direccion = "INSERT INTO direcciones (alias, tipo_via_id, nombre_via, numero_via, piso_puerta, codigo_postal, localidad, provincia) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;"
                 cursor.execute(sql_direccion, (direccion_data.get('alias', 'Dirección Empresa'), direccion_data.get('tipo_via_id'), direccion_data.get('nombre_via'), direccion_data.get('numero_via'), direccion_data.get('piso_puerta'), direccion_data.get('codigo_postal'), direccion_data.get('localidad'), direccion_data.get('provincia')))
                 direccion_id = cursor.fetchone()['id']
+                nombre_tecnico = data.get('nombre_completo_instalador') or data.get('nombre_tecnico')
 
                 sql_instalador = """
                     INSERT INTO instaladores (
@@ -53,9 +54,16 @@ def add_instalador(conn, data):
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id;
                 """
                 params = (
-                    data['app_user_id'], data.get('nombre_empresa'), data.get('get_instalador_by_id'),  data.get('cif_empresa'), direccion_id,
-                    data.get('email'), data.get('telefono_contacto'), data.get('competencia'),
-                    data.get('numero_colegiado_o_instalador'), data.get('numero_registro_industrial'), data.get('nombre_completo_instalador')
+                    data['app_user_id'],
+                    data.get('nombre_empresa'),
+                    data.get('cif_empresa'),
+                    direccion_id,
+                    data.get('email'),
+                    data.get('telefono_contacto'),
+                    data.get('competencia'),
+                    data.get('numero_colegiado_o_instalador'),
+                    data.get('numero_registro_industrial'),
+                    nombre_tecnico  # Usamos la variable robusta
                 )
                 cursor.execute(sql_instalador, params)
                 instalador_id = cursor.fetchone()['id']
