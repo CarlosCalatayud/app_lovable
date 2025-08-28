@@ -1,33 +1,26 @@
 # app/database.py
-
 import os
-import sqlite3
+import logging
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import logging
 
 def connect_db():
     """
-    Se conecta a la base de datos (PostgreSQL en producción, SQLite en local).
-    Esta es su única responsabilidad.
+    Se conecta a la base de datos PostgreSQL definida en la variable de entorno DATABASE_URL.
+    Esta es ahora su única responsabilidad.
     """
     database_url = os.environ.get('DATABASE_URL')
-    if database_url:
-        try:
-            conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
-            logging.info("Conexión a PostgreSQL establecida con éxito.")
-            return conn
-        except psycopg2.OperationalError as e:
-            logging.critical(f"FATAL: No se pudo conectar a PostgreSQL: {e}")
-            raise
-    else:
-        # Modo de desarrollo local con un archivo de BD
-        db_path = os.path.join(os.path.dirname(__file__), 'elecfacil_local.db')
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        logging.info(f"Conexión a SQLite local establecida: {db_path}")
+    if not database_url:
+        logging.critical("FATAL: La variable de entorno DATABASE_URL no está definida.")
+        raise ValueError("La configuración de la base de datos es incorrecta.")
+    
+    try:
+        # psycopg2 sabe cómo manejar directamente la URL de conexión completa.
+        conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+        logging.info("Conexión a la base de datos Supabase establecida con éxito.")
         return conn
+    except psycopg2.OperationalError as e:
+        logging.critical(f"FATAL: No se pudo conectar a la base de datos de Supabase: {e}", exc_info=True)
+        raise
 
-def is_postgres(conn):
-    """Función de ayuda para comprobar si la conexión es a PostgreSQL."""
-    return hasattr(conn, 'get_backend_pid')
+# La función is_postgres ya no es necesaria, la podemos eliminar.
