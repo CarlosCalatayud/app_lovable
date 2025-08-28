@@ -17,8 +17,11 @@ def db_connection_managed(f):
         conn = None
         try:
             conn = database.connect_db()
-            return f(conn, *args, **kwargs) # Inyecta la conexión
+            result = f(conn, *args, **kwargs)
+            conn.commit() # <<-- AÑADIR ESTO
+            return result
         except Exception as e:
+            conn.rollback() # <<-- AÑADIR ESTO
             current_app.logger.error(f"Excepción en ruta pública gestionada. Error: {e}", exc_info=True)
             return jsonify({'error': 'Error interno del servidor'}), 500
         finally:
@@ -57,13 +60,16 @@ def token_required(f):
 
             # Si el token es válido, gestionamos la conexión.
             conn = database.connect_db()
-            return f(conn, *args, **kwargs)
+            result = f(conn=conn, *args, **kwargs) # Ejecuta la función de la ruta
+            conn.commit() # <<-- AÑADIR ESTO PARA ASEGURAR QUE LOS CAMBIOS SE GUARDAN
+            return result
 
         except Exception as e:
             current_app.logger.error(f"Excepción en ruta privada. Error: {e}", exc_info=True)
             return jsonify({'error': 'Error interno del servidor'}), 500
         finally:
             if conn:
+                conn.rollback() # <<-- AÑADIR ESTO PARA DESHACER CAMBIOS EN CASO DE ERROR
                 conn.close()
                 current_app.logger.info("Conexión a la BD (privada) cerrada por el decorador.")
 
