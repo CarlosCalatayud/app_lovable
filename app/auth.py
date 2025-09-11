@@ -5,6 +5,8 @@ import os
 from functools import wraps
 from flask import request, jsonify, g, current_app
 from app import database
+import psycopg2 # Importar psycopg2 para manejar sus excepciones específicas
+
 
 def db_connection_managed(f):
     """
@@ -14,14 +16,31 @@ def db_connection_managed(f):
     """
     @wraps(f)
     def decorated(*args, **kwargs):
+        """
+        Decorador LIGERO para RUTAS PÚBLICAS.
+        NO verifica token. Su única función es abrir, inyectar
+        y cerrar de forma segura la conexión a la base de datos.
+        """
         conn = None
         try:
-            conn = database.connect_db()
+            conn = database.connect_db() # Intenta conectar
+            # Si la conexión falla, database.connect_db() ya lanzará una excepción
+            # y el código no llegará aquí si la excepción no es manejada internamente.
+            # Pero si por alguna razón conn fuera None y no se lanzó una excepción,
+            # el siguiente if lo atraparía.
+            if conn is None:
+                current_app.logger.error("La conexión a la base de datos no pudo ser establecida.")
+                return jsonify({'error': 'Error interno del servidor al conectar a la BD'}), 500
+
             result = f(conn, *args, **kwargs)
-            conn.commit() # <<-- AÑADIR ESTO
+            conn.commit()
             return result
-        except Exception as e:
-            conn.rollback() # <<-- AÑADIR ESTO
+        except psycopg2.OperationalError as e: # Capturar específicamente errores de conexión
+            current_app.logger.critical(f"Error de conexión a la BD en ruta pública: {e}", exc_info=True)
+            return jsonify({'error': 'No se pudo conectar a la base de datos'}), 500
+        except Exception as e: # Capturar otras excepciones generales
+            if conn: # Solo intentar rollback si la conexión existe
+                conn.rollback()
             current_app.logger.error(f"Excepción en ruta pública gestionada. Error: {e}", exc_info=True)
             return jsonify({'error': 'Error interno del servidor'}), 500
         finally:
@@ -60,16 +79,24 @@ def token_required(f):
 
             # Si el token es válido, gestionamos la conexión.
             conn = database.connect_db()
-            result = f(conn=conn, *args, **kwargs) # Ejecuta la función de la ruta
-            conn.commit() # <<-- AÑADIR ESTO PARA ASEGURAR QUE LOS CAMBIOS SE GUARDAN
+            if conn is None: # Manejar el caso donde la conexión falle
+                current_app.logger.error("La conexión a la base de datos no pudo ser establecida después de validar el token.")
+                return jsonify({'error': 'Error interno del servidor al conectar a la BD'}), 500
+
+            result = f(conn=conn, *args, **kwargs)
+            conn.commit()
             return result
 
+        except psycopg2.OperationalError as e: # Capturar específicamente errores de conexión
+            current_app.logger.critical(f"Error de conexión a la BD en ruta privada: {e}", exc_info=True)
+            return jsonify({'error': 'No se pudo conectar a la base de datos'}), 500
         except Exception as e:
+            if conn: # Solo intentar rollback si la conexión existe
+                conn.rollback()
             current_app.logger.error(f"Excepción en ruta privada. Error: {e}", exc_info=True)
             return jsonify({'error': 'Error interno del servidor'}), 500
         finally:
             if conn:
-                conn.rollback() # <<-- AÑADIR ESTO PARA DESHACER CAMBIOS EN CASO DE ERROR
                 conn.close()
                 current_app.logger.info("Conexión a la BD (privada) cerrada por el decorador.")
 
