@@ -109,7 +109,7 @@ def get_instalacion_completa(conn, instalacion_id, app_user_id):
             b.nombre_bateria AS bateria_nombre, d.nombre_distribuidora AS distribuidora_nombre,
             
             ti.nombre as tipo_instalacion_nombre, tc.nombre as tipo_cubierta_nombre,
-            tf.nombre_tipo_finca AS tipo_finca_nombre
+            tf.nombre_tipo_finca AS tipo_finca_nombre,
             te.nombre AS tipo_estructura_nombre
         FROM instalaciones i
         LEFT JOIN clientes c ON i.cliente_id = c.id

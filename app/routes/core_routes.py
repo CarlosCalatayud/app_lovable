@@ -383,6 +383,11 @@ def get_document_options(conn, instalacion_id):
         
     community_slug = PROVINCE_TO_COMMUNITY_MAP.get(provincia, None)
 
+    current_app.logger.info(f"......................PROVINCIA {provincia}...... community_slug: {community_slug}")
+
+
+    
+
     # 2. Obtener los documentos para esa comunidad
     available_docs = doc_generator_service.get_available_docs_for_community(community_slug) if community_slug else []
 
