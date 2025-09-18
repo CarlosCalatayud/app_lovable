@@ -16,7 +16,9 @@ def get_available_docs_for_community(community_slug: str) -> list:
     """
     template_dir = os.path.join('../templates', community_slug)
     
+    
     logging.info(f"Intentando ver docuemtnos disponibles en: {template_dir}")
+    logging.info(f"os.path.abspath(): {os.path.abspath()}")
     if not os.path.isdir(template_dir):
         logging.info("................................................not os.path.isdir(template_dir")
         return []
