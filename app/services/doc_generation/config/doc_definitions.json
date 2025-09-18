@@ -1,0 +1,42 @@
+{
+  "castilla_la_mancha": {
+    "MEMORIA TECNICA.docx": {
+      "name": "Memoria Técnica",
+      "context_schema": "castilla_la_mancha_doc_informe",
+      "required_calcs": ["common", "structural"]
+    },
+    "CERTIFICADO DECLARACION RESPONSABLE.docx": {
+      "name": "CERTIFICADO DECLARACION RESPONSABLE",
+      "context_schema": "castilla_la_mancha_doc_certificado_fin_obra",
+      "required_calcs": ["common"]
+    },
+    "ESTADIO BASICO SEG Y SALUD.docx": {
+      "name": "ESTADIO BASICO SEG Y SALUD",
+      "context_schema": "castilla_la_mancha_doc_proyecto",
+      "required_calcs": ["common"]
+    },
+    "GESTION RESIDUOS.docx": {
+      "name": "GESTION RESIDUOS",
+      "context_schema": "castilla_la_mancha_doc_proyecto",
+      "required_calcs": ["common"]
+    },
+    "PLAN DE CONTROL DE CALIDAD.docx": {
+      "name": "PLAN DE CONTROL DE CALIDAD",
+      "context_schema": "castilla_la_mancha_doc_proyecto",
+      "required_calcs": ["common"]
+    },
+    "DECLARACION RESPONSABLE.docx": {
+      "name": "DECLARACION RESPONSABLE",
+      "context_schema": "castilla_la_mancha_doc_proyecto",
+      "required_calcs": ["common"]
+    }
+  },
+  "madrid": {
+    "AUTORIZACION_REPRESENTANTE.docx": {
+      "name": "AUTORIZACION REPRESENTANTE",
+      "template": "madrid/AUTORIZACION_REPRESENTANTE.docx",
+      "context_schema": "madrid_autorizacion_representante",
+      "required_calcs": ["common"]
+    }
+  }
+}
