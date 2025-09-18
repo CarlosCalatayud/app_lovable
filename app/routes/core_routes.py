@@ -301,8 +301,8 @@ def generate_docs_api(conn, instalacion_id):
              if bateria_data := catalog_model.get_bateria_by_name(conn, nombre_bateria):
                  contexto_base.update(dict(bateria_data))
         
-        logging.info(f".............--------------........... contexto_base.emplazamiento_provincia: {contexto_base.get('emplazamiento_provincia')} ------ contexto_base.doc_id")
-        contexto_final = doc_generator_service.prepare_document_context(contexto_base, str(contexto_base.get('emplazamiento_provincia')).lower(), "prueba")
+        logging.info(f".............--------------........... contexto_base.emplazamiento_provincia: {contexto_base.get('emplazamiento_provincia')} ------ selected_doc_files: {selected_doc_files}")
+        contexto_final = doc_generator_service.prepare_document_context(contexto_base, str(contexto_base.get('emplazamiento_provincia')).lower(), selected_doc_files)
         
         generated_files_in_memory = []
         templates_base_path = os.path.join('templates', community_slug)
