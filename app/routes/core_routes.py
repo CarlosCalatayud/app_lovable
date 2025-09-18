@@ -302,7 +302,7 @@ def generate_docs_api(conn, instalacion_id):
                  contexto_base.update(dict(bateria_data))
         
         logging.info(f".............--------------........... contexto_base.emplazamiento_provincia: {contexto_base.get('emplazamiento_provincia')} ------ contexto_base.doc_id")
-        contexto_final = doc_generator_service.prepare_document_context(contexto_base, contexto_base.get('emplazamiento_provincia'), "prueba")
+        contexto_final = doc_generator_service.prepare_document_context(contexto_base, str(contexto_base.get('emplazamiento_provincia')).lower(), "prueba")
         
         generated_files_in_memory = []
         templates_base_path = os.path.join('templates', community_slug)
