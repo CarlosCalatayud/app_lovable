@@ -18,6 +18,7 @@ def get_available_docs_for_community(community_slug: str) -> list:
     
     logging.info(f"Intentando ver docuemtnos disponibles en: {template_dir}")
     if not os.path.isdir(template_dir):
+        logging.info("................................................not os.path.isdir(template_dir")
         return []
 
     docs = []
