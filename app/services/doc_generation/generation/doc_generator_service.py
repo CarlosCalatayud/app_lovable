@@ -37,7 +37,7 @@ def load_calculators():
                 # Importar el módulo. Usamos el paquete absoluto para importlib
                 # El nombre del paquete base para importlib.import_module debe coincidir con la estructura de directorios
                 # Si src es el root, entonces "src.generation.calculators"
-                module = import_module(f"src.generation.calculators.{module_name}")
+                module = import_module(f"generation.calculators.{module_name}")
                 # Almacenamos el módulo bajo un nombre más corto (ej: 'common', 'structural')
                 CALCULATOR_MODULES[module_name.replace('_calculations', '')] = module 
                 logging.info(f"Cargado módulo de cálculo: {module_name}")
@@ -51,7 +51,7 @@ def load_document_schema(schema_name: str) -> Type[BaseModel]:
     """Carga un modelo Pydantic de esquema de documento por su nombre."""
     try:
         # Los esquemas de documentos específicos están en src/config/document_schemas/
-        module_path = f"src.config.document_schemas.{schema_name}"
+        module_path = f"config.document_schemas.{schema_name}"
         # Intentar importar el módulo.
         # Por convención, el modelo dentro del archivo se llamará de una forma predecible.
         # Ej: para "andalucia_doc_informe", el modelo será "AndaluciaDocInformeContext"
@@ -129,7 +129,7 @@ def prepare_document_context(
 
     if not context_schema_name:
         logging.warning(f"Documento '{document_id}' no tiene un esquema de contexto definido. Se usará el modelo base si existe.")
-        SpecificDocContext = import_module("src.generation.models").ProjectContext # Fallback a ProjectContext
+        SpecificDocContext = import_module("generation.models").ProjectContext # Fallback a ProjectContext
     else:
         try:
             SpecificDocContext = load_document_schema(context_schema_name)
