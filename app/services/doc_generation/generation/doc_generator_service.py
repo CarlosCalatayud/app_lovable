@@ -51,7 +51,7 @@ def load_document_schema(schema_name: str) -> Type[BaseModel]:
     """Carga un modelo Pydantic de esquema de documento por su nombre."""
     try:
         # Los esquemas de documentos específicos están en src/config/document_schemas/
-        module_path = f"config.document_schemas.{schema_name}"
+        module_path = f"app.services.doc_generation.config.document_schemas.{schema_name}"
         # Intentar importar el módulo.
         # Por convención, el modelo dentro del archivo se llamará de una forma predecible.
         # Ej: para "andalucia_doc_informe", el modelo será "AndaluciaDocInformeContext"
