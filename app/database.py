@@ -23,6 +23,10 @@ def connect_db():
 
     MAX_RETRIES = 3
     for attempt in range(MAX_RETRIES):
+        
+        logging.info("**************************************************************************************************.")
+        logging.info("****************************************INTENTOOOOOOOO*********************************************.")
+        logging.info("**************************************************************************************************.")
         try:
             conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
             logging.info("Conexión a la base de datos Supabase establecida con éxito.")
