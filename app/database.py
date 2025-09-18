@@ -21,12 +21,14 @@ def connect_db():
     logging.info(f"Intentando conectar usando DATABASE_URL: {database_url}")
     # --- FIN DE LOGGING DE VERIFICACIÓN ---
 
-    try:
-        conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
-        logging.info("Conexión a la base de datos Supabase establecida con éxito.")
-        return conn
-    except psycopg2.OperationalError as e:
-        logging.critical(f"FALLO DE CONEXIÓN con la URL proporcionada. Error: {e}", exc_info=True)
-        raise
+    MAX_RETRIES = 3
+    for attempt in range(MAX_RETRIES):
+        try:
+            conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+            logging.info("Conexión a la base de datos Supabase establecida con éxito.")
+            return conn
+        except psycopg2.OperationalError as e:
+            logging.critical(f"FALLO DE CONEXIÓN con la URL proporcionada. Error: {e}", exc_info=True)
+            raise
 
 # La función is_postgres ya no es necesaria, la podemos eliminar.
