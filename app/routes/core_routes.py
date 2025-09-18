@@ -6,7 +6,7 @@ import docxtpl
 
 # CTO: 1. Importamos los módulos específicos, NO el antiguo 'database'
 from app.auth import token_required
-from app.services import doc_generator_service 
+from app.services.doc_generation import doc_generator_service 
 from app.utils import PROVINCE_TO_COMMUNITY_MAP, COMMUNITIES
 from app.models import (
     instalacion_model, 
