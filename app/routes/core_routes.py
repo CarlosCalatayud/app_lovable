@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request, current_app, send_file, g, make_r
 from decimal import Decimal
 import json, io, zipfile, os
 import docxtpl
+import logging
 
 # CTO: 1. Importamos los módulos específicos, NO el antiguo 'database'
 from app.auth import token_required
@@ -300,7 +301,8 @@ def generate_docs_api(conn, instalacion_id):
              if bateria_data := catalog_model.get_bateria_by_name(conn, nombre_bateria):
                  contexto_base.update(dict(bateria_data))
         
-        contexto_final = doc_generator_service.prepare_document_context(contexto_base)
+        logging.info(f".............--------------........... contexto_base.emplazamiento_provincia: {contexto_base.emplazamiento_provincia} ------ contexto_base.doc_id")
+        contexto_final = doc_generator_service.prepare_document_context(contexto_base, contexto_base.emplazamiento_provincia, "prueba")
         
         generated_files_in_memory = []
         templates_base_path = os.path.join('templates', community_slug)
