@@ -23,6 +23,7 @@ def get_available_docs_for_community(community_slug: str) -> list:
     docs = []
     # Usamos sorted() para asegurar un orden consistente en la lista devuelta a la API
     for filename in sorted(os.listdir(template_dir)):
+        logging.info(f"Lista de docuemtnos en: {template_dir}: filename: {filename}")
         if filename.endswith('.docx') and not filename.startswith('~'):
             docs.append({
                 "id": filename,
