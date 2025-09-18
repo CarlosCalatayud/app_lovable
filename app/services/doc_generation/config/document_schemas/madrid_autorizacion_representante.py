@@ -1,4 +1,4 @@
-from src.generation.models import ProjectContext, constr, Field
+from app.services.doc_generation.generation.models import ProjectContext, constr, Field
 from typing import Literal
 from datetime import date
 
