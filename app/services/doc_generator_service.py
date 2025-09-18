@@ -14,7 +14,7 @@ def get_available_docs_for_community(community_slug: str) -> list:
     """
     Escanea el directorio de plantillas para una comunidad y devuelve los documentos disponibles.
     """
-    template_dir = os.path.join('templates', community_slug)
+    template_dir = os.path.join('services/doc_generation/templates', community_slug)
     if not os.path.isdir(template_dir):
         return []
 
