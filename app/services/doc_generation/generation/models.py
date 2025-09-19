@@ -108,30 +108,26 @@ class Cableado(BaseModel):
 
 
 class ProjectContext(BaseModel):
-    """Modelo base para todos los datos de un proyecto."""
     id: str = Field(..., max_length=50)
-    nombre_proyecto: NombreCortoType
-    fecha_finalizacion: date
-    provincia_proyecto: ProvinciaType
+    nombre_proyecto: Optional[NombreCortoType] = None
+    fecha_finalizacion: Optional[date] = None
+    provincia_proyecto: Optional[ProvinciaType] = None
 
-    emplazamiento: Emplazamiento
-    promotor: Promotor
-    instalador: Instalador
+    emplazamiento: Optional[Emplazamiento] = None
+    promotor: Optional[Promotor] = None
+    instalador: Optional[Instalador] = None
 
-    # Lista de paneles si hay varios o simplemente uno
-    paneles: list[PanelSolar] = Field(..., min_items=1)
-    numero_paneles: int = Field(..., gt=0)  # Para compatibilidad con tu código actual
+    paneles: Optional[list[PanelSolar]] = None
+    numero_paneles: Optional[int] = None
 
-    inversor: Inversor
+    inversor: Optional[Inversor] = None
     bateria: Optional[Bateria] = None
     hospital_cercano: Optional[Hospital] = None
-    protecciones: Protecciones
-    cableado: Cableado
+    protecciones: Optional[Protecciones] = None
+    cableado: Optional[Cableado] = None
 
-    # Campos que el usuario puede introducir y que se pasan directamente a la plantilla
     referencia_catastral: ViaType = Field(None, max_length=50)
     descripcion_adicional: Optional[str] = None
-    # etc.
 
 # --- Modelos específicos para cada documento ---
 # Estos heredarán de ProjectContext y añadirán validaciones o campos específicos.

@@ -4,6 +4,7 @@ from typing import Dict, Any
 
 def format_addresses(ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Formatea direcciones completas para emplazamiento, promotor e instalador."""
+    logging.debug(f"........[format_addresses] Calculando direcciones con contexto: {ctx}")
     calculated_data = {}
 
     # Formato de Fecha Actual
@@ -96,6 +97,8 @@ def format_addresses(ctx: Dict[str, Any]) -> Dict[str, Any]:
 
 def calculate_pvgis_production(ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Calcula la producción estimada (placeholder para PVGIS)."""
+    logging.debug(f"........[calculate_pvgis_production] Calculando direcciones con contexto: {ctx}")
+
     calculated_data = {}
     total_panels = ctx.get('numero_paneles', 0)
     if total_panels > 0 and ctx.get('paneles') and len(ctx['paneles']) > 0:
