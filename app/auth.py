@@ -23,11 +23,7 @@ def db_connection_managed(f):
         """
         conn = None
         try:
-            conn = database.connect_db() # Intenta conectar
-            # Si la conexión falla, database.connect_db() ya lanzará una excepción
-            # y el código no llegará aquí si la excepción no es manejada internamente.
-            # Pero si por alguna razón conn fuera None y no se lanzó una excepción,
-            # el siguiente if lo atraparía.
+            conn = database.get_conn()
             if conn is None:
                 current_app.logger.error("La conexión a la base de datos no pudo ser establecida.")
                 return jsonify({'error': 'Error interno del servidor al conectar a la BD'}), 500
@@ -45,7 +41,7 @@ def db_connection_managed(f):
             return jsonify({'error': 'Error interno del servidor'}), 500
         finally:
             if conn:
-                conn.close()
+                database.release_conn(conn)
                 current_app.logger.info("Conexión a la BD (pública) cerrada por el decorador.")
     return decorated
 
@@ -78,7 +74,7 @@ def token_required(f):
                 return jsonify({'error': 'Token inválido'}), 401
 
             # Si el token es válido, gestionamos la conexión.
-            conn = database.connect_db()
+            conn = database.get_conn()
             if conn is None: # Manejar el caso donde la conexión falle
                 current_app.logger.error("La conexión a la base de datos no pudo ser establecida después de validar el token.")
                 return jsonify({'error': 'Error interno del servidor al conectar a la BD'}), 500
@@ -97,7 +93,7 @@ def token_required(f):
             return jsonify({'error': 'Error interno del servidor'}), 500
         finally:
             if conn:
-                conn.close()
+                database.release_conn(conn)
                 current_app.logger.info("Conexión a la BD (privada) cerrada por el decorador.")
 
     return decorated

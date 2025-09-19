@@ -3,7 +3,7 @@
 import os
 from flask import Blueprint, jsonify, current_app
 # CTO: Importamos solo la función de conexión.
-from app.database import connect_db
+from app.database import get_conn, release_conn
 import logging
 
 bp = Blueprint('utility', __name__)
@@ -71,7 +71,7 @@ def setup_populate_catalogs_endpoint(secret_key):
     
     conn = None
     try:
-        conn = connect_db()
+        conn = get_conn()
         with conn.cursor() as cursor:
             _populate_data(cursor, 'tipos_vias', ['nombre_tipo_via'], CATALOG_DATA['tipos_vias'])
             _populate_data(cursor, 'tipos_instalacion', ['nombre'], CATALOG_DATA['tipos_instalacion'])
@@ -92,4 +92,5 @@ def setup_populate_catalogs_endpoint(secret_key):
         current_app.logger.error(f"Error al poblar los catálogos: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
     finally:
-        if conn: conn.close()
+        if conn: 
+            release_conn(conn)
