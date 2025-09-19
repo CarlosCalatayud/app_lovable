@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import date
 
 # --- Aliases para tipos con restricciones ---
-TipoViaType: constr(min_length=1, max_length=50)
+TipoViaType = constr(min_length=1, max_length=50)
 LocalidadType = constr(min_length=1, max_length=50)
 ProvinciaType = constr(min_length=1, max_length=50)
 ViaType = Optional[str]  # usando Field para validar longitud
