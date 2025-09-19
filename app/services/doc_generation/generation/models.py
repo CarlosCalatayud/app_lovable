@@ -3,14 +3,18 @@ from typing import Optional
 from datetime import date
 
 # --- Aliases para tipos con restricciones ---
+TipoViaType: constr(min_length=1, max_length=50)
 LocalidadType = constr(min_length=1, max_length=50)
 ProvinciaType = constr(min_length=1, max_length=50)
-CifNifType = constr(min_length=1, max_length=20)
-NombreCortoType = constr(min_length=1, max_length=100)
-NombreLargoType = constr(min_length=1, max_length=150)
-ModeloType = constr(min_length=1, max_length=100)
 ViaType = Optional[str]  # usando Field para validar longitud
 CodigoPostalType = Optional[str]
+
+CifNifType = constr(min_length=1, max_length=20)
+
+NombreCortoType = constr(min_length=1, max_length=100)
+NombreLargoType = constr(min_length=1, max_length=150)
+
+ModeloType = constr(min_length=1, max_length=100)
 
 DecimalPositivo2 = condecimal(decimal_places=2, gt=0)
 
@@ -109,11 +113,19 @@ class Cableado(BaseModel):
 
 class ProjectContext(BaseModel):
     id: str = Field(..., max_length=50)
-    nombre_proyecto: Optional[NombreCortoType] = None
+    descripcion: Optional[NombreCortoType] = None
     fecha_finalizacion: Optional[date] = None
-    provincia_proyecto: Optional[ProvinciaType] = None
 
-    emplazamiento: Optional[Emplazamiento] = None
+    # Emplazamiento
+    emplazamiento_tipo_via_id: Optional[TipoViaType] = None
+    emplazamiento_nombre_via: Optional[TipoViaType] = None
+    emplazamiento_numero_via: Optional[TipoViaType] = None
+    emplazamiento_piso_puerta: Optional[TipoViaType] = None
+    emplazamiento_codigo_postal: Optional[CodigoPostalType] = None
+    emplazamiento_localidad: Optional[ProvinciaType] = None
+    emplazamiento_provincia: Optional[ProvinciaType] = None
+
+    # emplazamiento: Optional[Emplazamiento] = None
     promotor: Optional[Promotor] = None
     instalador: Optional[Instalador] = None
 

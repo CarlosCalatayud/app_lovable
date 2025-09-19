@@ -143,7 +143,7 @@ def prepare_document_context(
         validated_context = SpecificDocContext(**raw_context)
         # Convertimos el modelo Pydantic de nuevo a un diccionario para que docxtpl pueda usarlo
         ctx_dict = validated_context.model_dump() # Usar .dict() en Pydantic v1
-        logging.debug(
+        logging.info(
             f"Contexto validado para {document_id}: "
             f"{json.dumps(ctx_dict, indent=2, default=str)}"
         )
