@@ -143,12 +143,23 @@ def prepare_document_context(
         validated_context = SpecificDocContext(**raw_context)
         # Convertimos el modelo Pydantic de nuevo a un diccionario para que docxtpl pueda usarlo
         ctx_dict = validated_context.model_dump() # Usar .dict() en Pydantic v1
-        logging.debug(f"Contexto validado para {document_id}: {json.dumps(ctx_dict, indent=2, default=str)}")
+        logging.debug(
+            f"Contexto validado para {document_id}: "
+            f"{json.dumps(ctx_dict, indent=2, default=str)}"
+        )
     except ValidationError as e:
+        logging.error(
+            f"Errores de validación para {document_id}: "
+            f"{json.dumps(e.errors(), indent=2, default=str)}"
+        )
+
         logging.error(f"Errores de validación para {document_id}: {json.dumps(e.errors(), indent=2)}")
         raise ValueError(f"Datos de entrada incompletos o incorrectos para el documento '{document_id}': {e.errors()}")
     except Exception as e:
-        logging.error(f"Error inesperado al validar el contexto para '{document_id}': {e}")
+        logging.error(
+            f"Errores de validación para {document_id}: "
+            f"{json.dumps(e.errors(), indent=2, default=str)}"
+        )
         raise
 
     # 3. Ejecutar los cálculos requeridos
