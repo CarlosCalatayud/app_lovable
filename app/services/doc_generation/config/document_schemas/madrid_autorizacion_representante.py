@@ -1,10 +1,11 @@
 from app.services.doc_generation.generation.models import ProjectContext, constr, Field
-from typing import Literal
+from typing import Literal, Optional
 from datetime import date
 
 # Hereda de ProjectContext para incluir todos los campos base
 class MadridAutorizacionRepresentanteContext(ProjectContext):
 
+    fecha_finalizacion: Optional[date] = Field(default_factory=date.today, description="Fecha de finalización del proyecto (opcional)")
 
     # Validadores para campos que en BD vienen como int pero el modelo base los define como str
     @field_validator('id', 'emplazamiento_tipo_via_id', mode='before')
