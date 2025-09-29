@@ -28,37 +28,46 @@ except json.JSONDecodeError:
 # --- Cargar módulos de cálculo dinámicamente ---
 CALCULATOR_MODULES: Dict[str, Any] = {}
 def load_calculators():
-    # Asegúrate de que el directorio de calculators sea un paquete Python
-    # Esto significa que debe tener un __init__.py
     for filename in os.listdir(CALCULATORS_ROOT):
         if filename.endswith('_calculations.py') and not filename.startswith('__'):
-            module_name = filename[:-3] # Eliminar .py
+            module_name = filename[:-3]  # sin .py
             try:
-                # Importar el módulo. Usamos el paquete absoluto para importlib
-                # El nombre del paquete base para importlib.import_module debe coincidir con la estructura de directorios
-                # Si src es el root, entonces "src.generation.calculators"
-                module = import_module(f"generation.calculators.{module_name}")
-                # Almacenamos el módulo bajo un nombre más corto (ej: 'common', 'structural')
+                # Nota a mí mismo: usar ruta absoluta del paquete real
+                module = import_module(f"app.services.doc_generation.generation.calculators.{module_name}")
                 CALCULATOR_MODULES[module_name.replace('_calculations', '')] = module 
                 logging.info(f"Cargado módulo de cálculo: {module_name}")
             except Exception as e:
                 logging.error(f"Error al cargar el módulo de cálculo {module_name}: {e}")
 load_calculators()
 
+# --- Helper: coerción de tipos simple (Decimal->float, ids->str) ---
+def _coerce_simple_types(data: Dict[str, Any]) -> Dict[str, Any]:
+    # Nota a mí mismo: evitar errores de serialización y de validación tonta
+    def _coerce(v):
+        if isinstance(v, Decimal):
+            return float(v)
+        if isinstance(v, dict):
+            return {kk: _coerce(vv) for kk, vv in v.items()}
+        if isinstance(v, list):
+            return [_coerce(x) for x in v]
+        return v
+
+    out = {k: _coerce(v) for k, v in data.items()}
+
+    # ids clave que a veces llegan como int
+    for fk in ('id', 'emplazamiento_tipo_via_id'):
+        if fk in out and out[fk] is not None:
+            out[fk] = str(out[fk])
+
+    return out
+
 
 # --- Función auxiliar para cargar esquemas Pydantic ---
 def load_document_schema(schema_name: str) -> Type[BaseModel]:
-    """Carga un modelo Pydantic de esquema de documento por su nombre."""
     try:
-        # Los esquemas de documentos específicos están en src/config/document_schemas/
         module_path = f"app.services.doc_generation.config.document_schemas.{schema_name}"
-        # Intentar importar el módulo.
-        # Por convención, el modelo dentro del archivo se llamará de una forma predecible.
-        # Ej: para "andalucia_doc_informe", el modelo será "AndaluciaDocInformeContext"
         schema_module = import_module(module_path)
-        # Convertir nombre snake_case a CamelCase para el nombre de la clase
         class_name = "".join(word.capitalize() for word in schema_name.split('_')) + "Context"
-        
         schema_model = getattr(schema_module, class_name)
         if not issubclass(schema_model, BaseModel):
             raise TypeError(f"El objeto '{class_name}' en '{module_path}' no es un modelo Pydantic.")
@@ -66,6 +75,57 @@ def load_document_schema(schema_name: str) -> Type[BaseModel]:
     except (ImportError, AttributeError) as e:
         logging.error(f"No se pudo cargar el esquema Pydantic '{schema_name}': {e}")
         raise ValueError(f"Esquema de documento '{schema_name}' no encontrado o inválido.")
+
+def prepare_document_context(raw_context: Dict[str, Any], community_slug: str, document_id: str) -> Dict[str, Any]:
+    community_docs = DOCUMENT_DEFINITIONS.get(community_slug)
+    if not community_docs:
+        raise ValueError(f"Comunidad '{community_slug}' no tiene documentos definidos.")
+    doc_info = community_docs.get(document_id)
+    if not doc_info:
+        raise ValueError(f"Documento '{document_id}' no definido para la comunidad '{community_slug}'.")
+
+    context_schema_name = doc_info.get('context_schema')
+    required_calcs_groups = doc_info.get('required_calcs', [])
+
+    if not context_schema_name:
+        logging.warning(f"Documento '{document_id}' sin esquema de contexto definido. Fallback a ProjectContext.")
+        SpecificDocContext = import_module("app.services.doc_generation.generation.models").ProjectContext
+    else:
+        SpecificDocContext = load_document_schema(context_schema_name)
+
+    # 0) Saneado previo mínimo
+    raw_context = _coerce_simple_types(raw_context)
+
+    # 0.b) Asegurar fecha_finalizacion si el schema la espera (este doc la usa)
+    raw_context.setdefault('fecha_finalizacion', date.today())
+
+    # 1) Validar con Pydantic
+    try:
+        validated_context = SpecificDocContext(**raw_context)
+        ctx_dict = validated_context.model_dump()
+        logging.info(f"Contexto validado para {document_id}: {json.dumps(ctx_dict, indent=2, default=str)}")
+    except ValidationError as e:
+        # ¡Ojo! siempre default=str para no romper si hay Decimal/otros
+        logging.error(f"Errores de validación para {document_id}: {json.dumps(e.errors(), indent=2, default=str)}")
+        # (evitar segunda llamada sin default=str que te estaba rompiendo)
+        raise ValueError(f"Datos de entrada incompletos o incorrectos para '{document_id}': {e.errors()}")
+
+    # 2) Cálculos requeridos
+    calculated_data = {}
+    for calc_group_name in required_calcs_groups:
+        calculator_module = CALCULATOR_MODULES.get(calc_group_name)
+        if not calculator_module:
+            logging.warning(f"Grupo de cálculo '{calc_group_name}' no encontrado para '{document_id}'.")
+            continue
+        for attr_name in dir(calculator_module):
+            if attr_name.startswith('calculate_') and callable(getattr(calculator_module, attr_name)):
+                calc_func = getattr(calculator_module, attr_name)
+                new_calcs = calc_func(ctx_dict)
+                calculated_data.update(new_calcs)
+
+    # 3) Mezcla final (cálculos pisan origen si hay colisión)
+    ctx_dict.update(calculated_data)
+    return ctx_dict
 
 
 def get_available_docs_for_community(community_slug: str) -> List[Dict[str, str]]:
@@ -106,89 +166,6 @@ def generate_document_from_template(template_full_path: str, context: Dict[str, 
     file_stream.seek(0)
     return file_stream.getvalue()
 
-def prepare_document_context(
-    raw_context: Dict[str, Any], 
-    community_slug: str, 
-    document_id: str
-) -> Dict[str, Any]:
-    """
-    Valida el contexto de entrada y ejecuta los cálculos necesarios
-    para un documento específico de una comunidad.
-    """
-    # 1. Obtener la definición del documento
-    community_docs = DOCUMENT_DEFINITIONS.get(community_slug)
-    if not community_docs:
-        raise ValueError(f"Comunidad '{community_slug}' no tiene documentos definidos.")
-    
-    doc_info = community_docs.get(document_id)
-    if not doc_info:
-        raise ValueError(f"Documento '{document_id}' no definido para la comunidad '{community_slug}'.")
-
-    context_schema_name = doc_info.get('context_schema')
-    required_calcs_groups = doc_info.get('required_calcs', [])
-
-    if not context_schema_name:
-        logging.warning(f"Documento '{document_id}' no tiene un esquema de contexto definido. Se usará el modelo base si existe.")
-        SpecificDocContext = import_module("generation.models").ProjectContext # Fallback a ProjectContext
-    else:
-        try:
-            SpecificDocContext = load_document_schema(context_schema_name)
-        except ValueError as e:
-            logging.error(f"No se pudo cargar el esquema para el documento {document_id}: {e}")
-            raise e
-
-    # 2. Validar y normalizar el contexto de entrada usando Pydantic
-    try:
-        # Creamos una instancia del modelo Pydantic
-        validated_context = SpecificDocContext(**raw_context)
-        # Convertimos el modelo Pydantic de nuevo a un diccionario para que docxtpl pueda usarlo
-        ctx_dict = validated_context.model_dump() # Usar .dict() en Pydantic v1
-        logging.info(
-            f"Contexto validado para {document_id}: "
-            f"{json.dumps(ctx_dict, indent=2, default=str)}"
-        )
-    except ValidationError as e:
-        logging.error(
-            f"Errores de validación para {document_id}: "
-            f"{json.dumps(e.errors(), indent=2, default=str)}"
-        )
-
-        logging.error(f"Errores de validación para {document_id}: {json.dumps(e.errors(), indent=2)}")
-        raise ValueError(f"Datos de entrada incompletos o incorrectos para el documento '{document_id}': {e.errors()}")
-    except Exception as e:
-        logging.error(
-            f"Errores de validación para {document_id}: "
-            f"{json.dumps(e.errors(), indent=2, default=str)}"
-        )
-        raise
-
-    # 3. Ejecutar los cálculos requeridos
-    calculated_data = {}
-    for calc_group_name in required_calcs_groups:
-        calculator_module = CALCULATOR_MODULES.get(calc_group_name)
-        if not calculator_module:
-            logging.warning(f"Grupo de cálculo '{calc_group_name}' no encontrado para el documento '{document_id}'.")
-            continue
-
-        # Asumimos que cada módulo de cálculo tiene una función con el patrón `calculate_<group_name>_data`
-        # o que simplemente iteramos sobre todas las funciones que empiezan con 'calculate_'
-        for attr_name in dir(calculator_module):
-            if attr_name.startswith('calculate_') and callable(getattr(calculator_module, attr_name)):
-                calc_func = getattr(calculator_module, attr_name)
-                try:
-                    # Pasamos el contexto actual (ya con los datos calculados previamente)
-                    # y fusionamos los nuevos cálculos
-                    new_calcs = calc_func(ctx_dict) # Pasa el diccionario actual
-                    calculated_data.update(new_calcs)
-                    logging.debug(f"Ejecutado cálculo '{attr_name}' del grupo '{calc_group_name}'.")
-                except Exception as e:
-                    logging.error(f"Error al ejecutar la función de cálculo '{attr_name}' para '{document_id}': {e}")
-                    raise RuntimeError(f"Error en los cálculos para el documento: {e}")
-
-    # 4. Fusionar datos originales (validados) con los datos calculados
-    # Los datos calculados tienen prioridad si hay solapamiento
-    ctx_dict.update(calculated_data)
-    return ctx_dict
 
 def generate_documents_for_project(
     project_data: Dict[str, Any], 
