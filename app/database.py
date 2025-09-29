@@ -12,7 +12,7 @@ if not DATABASE_URL:
 
 # Ajusta los límites según tu tráfico y el límite de Supabase (p.ej. 20-30 conexiones máx.)
 MIN_CONN = 1
-MAX_CONN = 48
+MAX_CONN = 8
 
 # Crear el pool global al iniciar la app
 try:
