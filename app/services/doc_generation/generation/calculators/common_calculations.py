@@ -2,7 +2,7 @@ import datetime
 import logging
 from typing import Dict, Any
 
-def format_addresses(ctx: Dict[str, Any]) -> Dict[str, Any]:
+def calculate_format_addresses(ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Formatea direcciones completas para emplazamiento, promotor e instalador."""
     logging.debug(f"........[format_addresses] Calculando direcciones con contexto: {ctx}")
     calculated_data = {}

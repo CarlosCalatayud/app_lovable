@@ -4,7 +4,6 @@ from datetime import date
 
 # Hereda de ProjectContext para incluir todos los campos base
 class MadridAutorizacionRepresentanteContext(ProjectContext):
-    fecha_finalizacion: Optional[date] = Field(..., description="Fecha de finalización del proyecto")
 
 
     # Validadores para campos que en BD vienen como int pero el modelo base los define como str
