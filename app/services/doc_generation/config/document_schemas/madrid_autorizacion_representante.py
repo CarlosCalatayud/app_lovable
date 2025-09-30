@@ -7,12 +7,7 @@ class MadridAutorizacionRepresentanteContext(ProjectContext):
 
     fecha_finalizacion: Optional[date] = Field(default_factory=date.today, description="Fecha de finalización del proyecto (opcional)")
 
-    # Validadores para campos que en BD vienen como int pero el modelo base los define como str
-    @field_validator('id', 'emplazamiento_tipo_via_id', mode='before')
-    def _cast_to_str(cls, v):
-        # Nota a mí mismo: pydantic v2 - este validador corre "before", convierte int->str
-        return str(v) if v is not None else v
-    
+
     @property
     def nombre_completo_cliente(self) -> str:
         return self.promotor.nombre_razon_social if self.promotor else "Cliente desconocido"
