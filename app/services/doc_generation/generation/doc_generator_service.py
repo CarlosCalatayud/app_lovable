@@ -5,6 +5,8 @@ from typing import Dict, Any, List, Type
 from docxtpl import DocxTemplate
 from pydantic import ValidationError, BaseModel
 from importlib import import_module
+from decimal import Decimal
+
 
 # --- Configuración de rutas ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
