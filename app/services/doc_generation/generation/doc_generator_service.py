@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os, io, zipfile
 import json
@@ -99,7 +100,7 @@ def prepare_document_context(raw_context: Dict[str, Any], community_slug: str, d
     raw_context = _coerce_simple_types(raw_context)
 
     # 0.b) Asegurar fecha_finalizacion si el schema la espera (este doc la usa)
-    raw_context.setdefault('fecha_finalizacion', date.today())
+    raw_context.setdefault('fecha_finalizacion', datetime.date.today())
 
     # 1) Validar con Pydantic
     try:
