@@ -1,0 +1,89 @@
+# templates/madrid/documents.yml
+documents:
+  - id: memoria_tecnica_bt
+    filename: "MEMORIA TECNICA.docx"
+    name: "Memoria técnica de instalación FV (BT)"
+    description: "Memoria técnica oficial para instalación fotovoltaica de baja tensión (CA Madrid)."
+    type: "docx"
+
+    # Campos mínimos imprescindibles
+    requires:
+      - cliente_nombre
+      - direccion_emplazamiento_completa
+      - instaladorTecnicoNombre
+      - nombre_completo_instalador
+      - numero_colegiado_o_instalador
+      - instalador_provincia
+      - numero_paneles
+      - potencia_pico_w
+      - superficieConstruidaM2
+      - pesoEstructuraKg
+
+    # Si faltan, se dejan en blanco (la plantilla los admite vacíos)
+    optional:
+      - promotor_nombre
+      - promotor_direccion_completa
+      - promotor_cif
+      - instalador_empresa
+      - instalador_direccion_completa
+      - instalador_cif_empresa
+      - instalador_tecnico_competencia
+      - tipoDeEstructura
+      - tipoDeCubierta
+      - panel_solar_nombre
+      - panel_tecnologia
+      - panel_numero_celulas
+      - peso_kg
+      - largo_mm
+      - ancho_mm
+      - panel_profundidad_mm
+      - panel_tension_voc
+      - panel_eficiencia
+      - textoBaterias
+      - textoDisposiciónModulos
+      - inversor_nombre
+      - inversor_potencia_salida_va
+      - inversor_tecnologia
+      - inversor_largo_mm
+      - inversor_ancho_mm
+      - inversor_profundo_mm
+      - inversor_peso_kg
+      - inversor_proteccion_ip
+      - inversor_potencia_max_w
+      - inversor_tension_max_v
+      - cable_dc_material
+      - cable_dc_seccion
+      - cable_dc_longitud
+      - caidaTensionCCString1
+      - cable_ac_material
+      - cable_ac_seccion
+      - cable_ac_longitud
+      - caidaTensionCA
+      - longitudCableAcM
+      - fusible_cc_a
+      - protector_sobretensiones_v
+      - magnetotermico_a
+      - polosCA
+      - diferencialA
+      - sensibilidadMa
+      - Enero
+      - Febrero
+      - Marzo
+      - Abril
+      - Mayo
+      - Junio
+      - Julio
+      - Agosto
+      - Septiembre
+      - Octubre
+      - Noviembre
+      - Diciembre
+      - produccionAnual
+
+    # Campos calculados automáticos
+    computed:
+      dia_actual: "date:day"
+      mes_actual: "date:month_name_es"
+      anio_actual: "date:year"
+      fechaCreacion: "date:%d/%m/%Y"
+      densidadDeCarga: "formula:pesoEstructuraKg/superficieConstruidaM2"

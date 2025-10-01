@@ -2,6 +2,16 @@ import datetime
 import logging
 from typing import Dict, Any
 
+def _fmt_dir(nombre_via, numero_via, piso_puerta, localidad, provincia) -> str:
+    dir_parts = [nombre_via or '', numero_via or '', piso_puerta or '']
+    direccion_str = ' '.join(filter(None, dir_parts)).strip()
+    if direccion_str and localidad:
+        return f"{direccion_str}, {localidad} ({provincia or ''})".strip()
+    if localidad:
+        return f"{localidad} ({provincia or ''})".strip()
+    return provincia or "No especificada"
+
+
 def calculate_format_addresses(ctx: Dict[str, Any]) -> Dict[str, Any]:
     """Formatea direcciones completas para emplazamiento, promotor e instalador."""
     logging.debug(f"........[format_addresses] Calculando direcciones con contexto: {ctx}")
