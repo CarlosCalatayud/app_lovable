@@ -1,4 +1,4 @@
-# app/services/doc_generation/generation.py
+# app/services/doc_generation/generation_service.py
 from __future__ import annotations
 
 import io, os, re, json

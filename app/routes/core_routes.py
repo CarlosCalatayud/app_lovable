@@ -7,7 +7,7 @@ import logging
 
 # CTO: 1. Importamos los módulos específicos, NO el antiguo 'database'
 from app.auth import token_required
-from app.services.doc_generation.generation import doc_generator_service 
+from app.services.doc_generation.generation_service import doc_generator_service 
 from app.utils import PROVINCE_TO_COMMUNITY_MAP, COMMUNITIES
 from app.models import (
     instalacion_model, 
@@ -305,7 +305,7 @@ def generate_docs_api(conn, instalacion_id):
         contexto_final = doc_generator_service.prepare_document_context(contexto_base, str(contexto_base.get('emplazamiento_provincia')).lower(), selected_doc_files[0])
         
         generated_files_in_memory = []
-        templates_base_path = os.path.join('templates', community_slug)
+        templates_base_path = community_slug #os.path.join('templates', community_slug)
 
         for template_file_name in selected_doc_files:
             template_path = os.path.join(templates_base_path, template_file_name)
