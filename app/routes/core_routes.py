@@ -301,7 +301,33 @@ def generate_docs_api(conn, instalacion_id):
              if bateria_data := catalog_model.get_bateria_by_name(conn, nombre_bateria):
                  contexto_base.update(dict(bateria_data))
         
-        logging.info(f".............--------------........... contexto_base.emplazamiento_provincia: {contexto_base.get('emplazamiento_provincia')} ------ selected_doc_files: {selected_doc_files}")
+        # ===== DEBUG opcional: ver el contexto que sale de BD + catálogo =====
+        # Actívalo con DOCGEN_DEBUG=1 (en local o en Render)
+        if os.getenv("DOCGEN_DEBUG", "").lower() in ("1", "true", "yes", "on"):
+            try:
+                current_app.logger.info("DOCGEN endpoint: TEMPLATES_ROOT=%s", os.getenv("TEMPLATES_ROOT"))
+                current_app.logger.info(
+                    "DOCGEN contexto_base (endpoint)\n%s",
+                    json.dumps(
+                        contexto_base,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        indent=2,
+                        default=str,   # para Decimals/fechas
+                    ),
+                )
+            except Exception as e:
+                current_app.logger.info(
+                    "DOCGEN contexto_base (endpoint) keys=%d err=%s",
+                    len(contexto_base or {}),
+                    e,
+                )
+
+        logging.info(
+            ".............--------------........... contexto_base.emplazamiento_provincia: %s ------ selected_doc_files: %s",
+            contexto_base.get('emplazamiento_provincia'),
+            selected_doc_files,
+        )
         contexto_final = doc_generator_service.prepare_document_context(contexto_base, str(contexto_base.get('emplazamiento_provincia')).lower(), selected_doc_files[0])
         
         generated_files_in_memory = []

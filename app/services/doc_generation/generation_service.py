@@ -12,13 +12,61 @@ from docxtpl import DocxTemplate, InlineImage  # inline if someday needed
 from datetime import datetime
 from decimal import Decimal
 
+import logging
+LOGGER = logging.getLogger("docgen")
+DOCGEN_DEBUG = os.getenv("DOCGEN_DEBUG", "").lower() in ("1", "true", "yes", "on")
+DOCGEN_LOG_PII = os.getenv("DOCGEN_LOG_PII", "").lower() in ("1", "true", "yes", "on")
+
+
 import  logging
 # ============
 # Utilidades
 # ============
 
-TEMPLATES_ROOT = Path(os.environ.get("TEMPLATES_ROOT", "templates")).resolve()
+TEMPLATES_ROOT = Path(os.environ.get("TEMPLATES_ROOT", "app/services/doc_generation/templates")).resolve()
 DOCS_INDEX_FILENAME = os.environ.get("DOCS_INDEX_FILENAME", "documents.yml")
+
+# -------------------------
+# Helpers de logging seguro
+# -------------------------
+_SUSPECT_KEYS = ("dni", "nif", "cif", "email", "correo", "telefono", "teléfono", "phone", "movil", "móvil", "address", "direccion", "dirección")
+_EMAIL_RE = re.compile(r'([A-Za-z0-9._%+-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,})')
+_DIGITS_RE = re.compile(r'\d')
+
+def _mask_value(k: str, v: Any) -> Any:
+    if DOCGEN_LOG_PII:
+        return v
+    key = (k or "").lower()
+    if any(s in key for s in _SUSPECT_KEYS):
+        s = str(v)
+        if "email" in key or _EMAIL_RE.search(s):
+            return _EMAIL_RE.sub(r'***@\2', s)
+        # enmascara dígitos dejando últimos 2
+        digits = _DIGITS_RE.findall(s)
+        if len(digits) >= 4:
+            return re.sub(r'\d', "*", s[:-2]) + s[-2:]
+        return "***"
+    return v
+
+def _serialize(v: Any) -> Any:
+    if isinstance(v, Decimal):
+        return float(v)
+    if isinstance(v, datetime):
+        return v.isoformat()
+    if isinstance(v, bytes):
+        return f"<bytes:{len(v)}>"
+    return v
+
+def _log_context(title: str, ctx: Dict[str, Any]):
+    if not DOCGEN_DEBUG:
+        return
+    try:
+        safe = {k: _serialize(_mask_value(k, v)) for k, v in (ctx or {}).items()}
+        dump = json.dumps(safe, ensure_ascii=False, sort_keys=True, indent=2)
+        LOGGER.info("DOCGEN %s\n%s", title, dump)
+    except Exception as e:
+        LOGGER.warning("DOCGEN no pudo volcar contexto (%s)", e)
+
 
 def _safe_join(base: Path, *parts: str) -> Path:
     p = (base.joinpath(*parts)).resolve()
@@ -102,6 +150,11 @@ class _DocxEngine:
         self.env = Environment(autoescape=False, undefined=StrictUndefined, trim_blocks=True, lstrip_blocks=True)
 
     def render(self, tpl_path: Path, context: Dict[str, Any]) -> bytes:
+        if DOCGEN_DEBUG:
+            LOGGER.info("DOCGEN render: tpl_rel='%s' tpl_abs='%s' TEMPLATES_ROOT='%s' ctx_keys=%d",
+                        str(tpl_path.relative_to(TEMPLATES_ROOT)) if str(tpl_path).startswith(str(TEMPLLES_ROOT)) else str(tpl_path),
+                        str(tpl_path), str(TEMPLATES_ROOT), len(context or {}))
+
         doc = DocxTemplate(str(tpl_path))
         # Si algún valor es Decimal, conviene serializar a str/float
         normalized = {}
@@ -127,6 +180,10 @@ class DocGeneratorService:
     # ---- API visible desde tus rutas (mantén la firma) ----
 
     def get_available_docs_for_community(self, community_slug: str) -> List[Dict[str, str]]:
+        if DOCGEN_DEBUG:
+            LOGGER.info("DOCGEN list_available: community='%s' base='%s' index='%s' docs=%d",
+                        community_slug, idx.base_dir, idx.index_path, len(idx.docs))
+
         idx = DocIndex(community_slug)
         return idx.list_available()
 
@@ -144,6 +201,10 @@ class DocGeneratorService:
         # y dejaremos la comprobación final a generate_document. Aun así, haremos un intento con 'madrid' si existe.
         # Para robustez, si hay variable de entorno DEFAULT_COMMUNITY, úsala como fallback.
         default_slug = os.environ.get("DEFAULT_COMMUNITY", "madrid")
+        if DOCGEN_DEBUG:
+            LOGGER.info("DOCGEN prepare: default_slug='%s' province='%s' selected_tpl='%s' TEMPLATES_ROOT='%s'",
+                        default_slug, community_province, selected_template_filename, str(TEMPLATES_ROOT))
+            _log_context("contexto_base (in)", contexto_base)
         try:
             idx = DocIndex(default_slug)
             # Si existe el doc pedido en ese índice, úsalo. Si no, igualmente validaremos después al generar.
@@ -169,18 +230,22 @@ class DocGeneratorService:
         if ctx.get("densidadDeCarga") in (None, "", "0") and peso and sup and sup > 0:
             dens = peso / sup
             ctx["densidadDeCarga"] = f"{dens:.2f}"
-        else:
-            logging.error("ERROR EN VARIABLE DE ARCHIVO: densidadDeCarga ")
+
+        LOGGER.debug("DOCGEN densidadDeCarga=%s (peso=%s, sup=%s)", ctx.get("densidadDeCarga"), peso, sup)
 
         # Homogeneización de algunas claves (alias frecuentes)
         # p.ej., longitudes con distinto nombre en diferentes tablas
-        logging.DEBUG("OBTENIENDO: longitudCableAcM")
+        LOGGER.debug("DOCGEN alias longitudCableAcM <- cable_ac_longitud if aplica")
+
         if ctx.get("longitudCableAcM") is None and ctx.get("cable_ac_longitud") is not None:
             ctx["longitudCableAcM"] = ctx["cable_ac_longitud"]
         
 
         # Si tenemos definición de doc, validamos campos requeridos declarados en YAML
         if docdef:
+            LOGGER.info("DOCGEN docdef: requires=%s optional=%s computed=%s",
+                            docdef.requires, docdef.optional, list((docdef.computed or {}).keys()))
+
             missing = []
             for k in docdef.requires:
                 v = ctx.get(k, None)
@@ -219,6 +284,7 @@ class DocGeneratorService:
                             ctx[key] = f"{(av/bv):.2f}"
 
         # Devolvemos el contexto final: core_routes lo reutiliza para todos los docs seleccionados
+        _log_context("contexto_final (out)", ctx)
         return ctx
 
     def generate_document(self, template_path: str, context: Dict[str, Any]) -> bytes:
@@ -235,6 +301,9 @@ class DocGeneratorService:
             raise ValueError("Tipo de plantilla no soportado (sólo .docx)")
 
         try:
+            if DOCGEN_DEBUG:
+                LOGGER.info("DOCGEN generate_document: rel='%s' abs='%s' size_ctx=%d",
+                            template_path, str(p), len(context or {}))
             return self.docx_engine.render(p, context)
         except Exception as e:
             # Mejoramos el mensaje si era por variable ausente
