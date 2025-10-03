@@ -9,18 +9,18 @@ documents:
     # Campos mínimos imprescindibles
     requires:
       - cliente_nombre
-      - direccion_emplazamiento_completa
-      - instaladorTecnicoNombre
       - nombre_completo_instalador
       - numero_colegiado_o_instalador
       - instalador_provincia
       - numero_paneles
       - potencia_pico_w
-      - superficieConstruidaM2
-      - pesoEstructuraKg
 
     # Si faltan, se dejan en blanco (la plantilla los admite vacíos)
     optional:
+      - direccion_emplazamiento_completa
+      - instaladorTecnicoNombre
+      - superficieConstruidaM2
+      - pesoEstructuraKg
       - promotor_nombre
       - promotor_direccion_completa
       - promotor_cif
