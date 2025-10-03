@@ -12,6 +12,7 @@ from docxtpl import DocxTemplate, InlineImage  # inline if someday needed
 from datetime import datetime
 from decimal import Decimal
 
+import  logging
 # ============
 # Utilidades
 # ============
@@ -168,11 +169,15 @@ class DocGeneratorService:
         if ctx.get("densidadDeCarga") in (None, "", "0") and peso and sup and sup > 0:
             dens = peso / sup
             ctx["densidadDeCarga"] = f"{dens:.2f}"
+        else:
+            logging.error("ERROR EN VARIABLE DE ARCHIVO: densidadDeCarga ")
 
         # Homogeneización de algunas claves (alias frecuentes)
         # p.ej., longitudes con distinto nombre en diferentes tablas
+        logging.DEBUG("OBTENIENDO: longitudCableAcM")
         if ctx.get("longitudCableAcM") is None and ctx.get("cable_ac_longitud") is not None:
             ctx["longitudCableAcM"] = ctx["cable_ac_longitud"]
+        
 
         # Si tenemos definición de doc, validamos campos requeridos declarados en YAML
         if docdef:
