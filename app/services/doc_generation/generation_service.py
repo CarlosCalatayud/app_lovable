@@ -152,7 +152,7 @@ class _DocxEngine:
     def render(self, tpl_path: Path, context: Dict[str, Any]) -> bytes:
         if DOCGEN_DEBUG:
             LOGGER.info("DOCGEN render: tpl_rel='%s' tpl_abs='%s' TEMPLATES_ROOT='%s' ctx_keys=%d",
-                        str(tpl_path.relative_to(TEMPLATES_ROOT)) if str(tpl_path).startswith(str(TEMPLLES_ROOT)) else str(tpl_path),
+                        str(tpl_path.relative_to(TEMPLATES_ROOT)) if str(tpl_path).startswith(str(TEMPLATES_ROOT)) else str(tpl_path),
                         str(tpl_path), str(TEMPLATES_ROOT), len(context or {}))
 
         doc = DocxTemplate(str(tpl_path))
