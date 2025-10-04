@@ -1,47 +1,65 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+
+def _to_float(x) -> Optional[float]:
+    try:
+        if x is None or x == "":
+            return None
+        s = str(x).strip().replace(",", ".")
+        return float(s)
+    except Exception:
+        return None
 
 def calculate_structural_data(ctx: Dict[str, Any]) -> Dict[str, Any]:
-    """Calcula la superficie y densidad de carga de la instalación."""
-    calculated_data = {}
-    
-    cantidad_paneles = ctx.get('numero_paneles', 0)
-    paneles_data = ctx.get('paneles', [{}])
-    panel = paneles_data[0] if paneles_data else {} # Asumo que todos los paneles son iguales
-    
-    potencia_pico_panel = panel.get('potencia_pico_w', 0)
-    largo_panel = panel.get('largo_mm', 0)
-    ancho_panel = panel.get('ancho_mm', 0)
-    peso_panel = panel.get('peso_kg', 0.0)
+    """
+    Calcula superficieConstruidaM2, pesoEstructuraKg (paneles + estructura) y
+    densidades (kg/m2 y kN/m2) de forma tolerante a None/cadenas.
+    """
+    calculated: Dict[str, Any] = {}
 
-    logging.info(f"--- INICIO CÁLCULOS ESTRUCTURALES ---")
-    logging.info(f"Datos de entrada: Cantidad Paneles={cantidad_paneles}, Largo Panel={largo_panel}mm, Ancho Panel={ancho_panel}mm, Peso Panel={peso_panel}kg")
+    # nº paneles
+    n_pan = _to_float(ctx.get("numero_paneles")) or 0.0
+    n_pan = int(n_pan) if n_pan > 0 else 0
 
-    # Cálculo de Superficie
-    superficieConstruidaM2 = 0
-    if largo_panel > 0 and ancho_panel > 0:
-        superficie_panel_m2 = (largo_panel / 1000) * (ancho_panel / 1000)
-        superficieConstruidaM2 = round(cantidad_paneles * superficie_panel_m2, 2)
-    calculated_data['superficieConstruidaM2'] = superficieConstruidaM2
-    logging.info(f"Cálculo de Superficie: superficieConstruidaM2 = {superficieConstruidaM2} m^2")
+    # fuente de datos de panel: ctx['paneles'][0] o campos planos
+    p0 = (ctx.get("paneles") or [{}])[0] or {}
+    largo_mm  = _to_float(p0.get("largo_mm")  or ctx.get("largo_mm"))    or 0.0
+    ancho_mm  = _to_float(p0.get("ancho_mm")  or ctx.get("ancho_mm"))    or 0.0
+    peso_kg   = _to_float(p0.get("peso_kg")   or ctx.get("peso_kg"))     or 0.0
+    ppk_w     = _to_float(p0.get("potencia_pico_w") or ctx.get("potencia_pico_w")) or 0.0
 
-    # Cálculo de Carga
-    peso_total_paneles = cantidad_paneles * peso_panel
-    peso_total_estructura = cantidad_paneles * 2 # Asumimos 2kg por panel por ahora
+    logging.info("--- INICIO CÁLCULOS ESTRUCTURALES ---")
+    logging.info("Entrada: n_paneles=%s, largo_mm=%s, ancho_mm=%s, peso_panel_kg=%s, ppk_w=%s",
+                 n_pan, largo_mm, ancho_mm, peso_kg, ppk_w)
+
+    # Superficie total (m2)
+    superficieConstruidaM2 = 0.0
+    if n_pan > 0 and largo_mm > 0 and ancho_mm > 0:
+        superficie_panel_m2 = (largo_mm / 1000.0) * (ancho_mm / 1000.0)
+        superficieConstruidaM2 = round(n_pan * superficie_panel_m2, 2)
+    calculated["superficieConstruidaM2"] = superficieConstruidaM2
+    logging.info("Superficie: %s m^2", superficieConstruidaM2)
+
+    # Peso total = paneles + estructura (2 kg/panel por defecto)
+    extra_kg = _to_float(ctx.get("extra_kg_por_panel")) or 2.0
+    peso_total_paneles = n_pan * peso_kg
+    peso_total_estructura = n_pan * extra_kg
     pesoEstructuraKg = round(peso_total_paneles + peso_total_estructura, 2)
-    
-    densidadDeCarga = 0
-    densidadDeCargaKNm2 = 0
+    calculated["pesoEstructuraKg"] = pesoEstructuraKg
 
+    # Densidades
+    densidadDeCarga = 0.0
+    densidadDeCargaKNm2 = 0.0
     if superficieConstruidaM2 > 0:
         densidadDeCarga = round(pesoEstructuraKg / superficieConstruidaM2, 2)
         if densidadDeCarga > 0:
-            densidadDeCargaKNm2 = round((densidadDeCarga * 9.807) / 1000, 2)
-            
-    calculated_data['densidadDeCarga'] = densidadDeCarga
-    calculated_data['densidadDeCargaKNm2'] = densidadDeCargaKNm2 if densidadDeCargaKNm2 > 0 else ''
+            densidadDeCargaKNm2 = round((densidadDeCarga * 9.807) / 1000.0, 2)
 
-    logging.info(f"Cálculo de Carga: Peso Total={pesoEstructuraKg}kg, densidadDeCarga = {densidadDeCarga} kg/m^2, densidadDeCargaKNm2 = {densidadDeCargaKNm2} kN/m^2")
-    logging.info(f"--- FIN CÁLCULOS ESTRUCTURALES ---")
-    
-    return calculated_data
+    calculated["densidadDeCarga"] = densidadDeCarga
+    calculated["densidadDeCargaKNm2"] = densidadDeCargaKNm2 if densidadDeCargaKNm2 > 0 else ""
+
+    logging.info("Carga: pesoEstructuraKg=%s kg, densidad=%s kg/m2, densidad_kNm2=%s kN/m2",
+                 pesoEstructuraKg, densidadDeCarga, densidadDeCargaKNm2)
+    logging.info("--- FIN CÁLCULOS ESTRUCTURALES ---")
+
+    return calculated

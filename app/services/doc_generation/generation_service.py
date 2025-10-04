@@ -263,7 +263,12 @@ class DocGeneratorService:
         if ctx.get("densidadDeCarga") in (None, "", "0") and peso and sup and sup > 0:
             dens = peso / sup
             ctx["densidadDeCarga"] = f"{dens:.2f}"
-
+        
+        for key in ("superficieConstruidaM2", "pesoEstructuraKg", "densidadDeCarga", "densidadDeCargaKNm2"):
+            if key not in ctx:
+                current_app.logger.info("DOCGEN ASEGURAMPS QUE NO ESTE VACIO=%s", key)
+                ctx[key] = ""
+        
         current_app.logger.info("DOCGEN densidadDeCarga=%s (peso=%s, sup=%s)", ctx.get("densidadDeCarga"), peso, sup)
 
         # Homogeneización de algunas claves (alias frecuentes)
