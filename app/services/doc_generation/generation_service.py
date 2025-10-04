@@ -5,12 +5,14 @@ import io, os, re, json
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+from flask import current_app
 
 import yaml
 from jinja2 import Environment, StrictUndefined
 from docxtpl import DocxTemplate, InlineImage  # inline if someday needed
 from datetime import datetime
 from decimal import Decimal
+from app.services.doc_generation.generation.calculators.structural_calculations import calculate_structural_data
 
 import logging
 LOGGER = logging.getLogger("docgen")
@@ -214,6 +216,37 @@ class DocGeneratorService:
 
         # Base
         ctx = dict(contexto_base or {})
+        # ===== CÁLCULOS ESTRUCTURALES INTEGRADOS =====
+        try:
+            # Construye un 'panel' sintético si no vino ctx['paneles']
+            if not ctx.get('paneles'):
+                synthetic_panel = {
+                    'potencia_pico_w': ctx.get('potencia_pico_w', 0),
+                    'largo_mm': ctx.get('largo_mm', 0),
+                    'ancho_mm': ctx.get('ancho_mm', 0),
+                    'peso_kg': ctx.get('peso_kg', 0.0),
+                }
+                ctx['paneles'] = [synthetic_panel]
+
+            # Calcula
+            struct_calc = calculate_structural_data(ctx)  # {'superficieConstruidaM2', 'densidadDeCarga', 'densidadDeCargaKNm2'}
+
+            # Fusión con prioridad controlada por env var
+            def _should_overwrite(k, v):
+                cur = ctx.get(k)
+                # Considera vacío: None, "", 0, "0"
+                return (cur is None) or (cur == "") or (cur == 0) or (cur == "0")
+
+            for k, v in struct_calc.items():
+                if _should_overwrite(k, v):
+                    ctx[k] = v
+
+            logging.getLogger("docgen").info(
+                "DOCGEN struct_calc merged: %s",
+                {k: ctx.get(k) for k in ('superficieConstruidaM2', 'densidadDeCarga', 'densidadDeCargaKNm2')}
+            )
+        except Exception as e:
+            logging.getLogger("docgen").warning("DOCGEN cálculo estructural falló: %s", e)
 
         # ---------- Cálculos genéricos (siempre disponibles) ----------
         now = datetime.now()
@@ -231,11 +264,11 @@ class DocGeneratorService:
             dens = peso / sup
             ctx["densidadDeCarga"] = f"{dens:.2f}"
 
-        LOGGER.debug("DOCGEN densidadDeCarga=%s (peso=%s, sup=%s)", ctx.get("densidadDeCarga"), peso, sup)
+        current_app.logger.info("DOCGEN densidadDeCarga=%s (peso=%s, sup=%s)", ctx.get("densidadDeCarga"), peso, sup)
 
         # Homogeneización de algunas claves (alias frecuentes)
         # p.ej., longitudes con distinto nombre en diferentes tablas
-        LOGGER.debug("DOCGEN alias longitudCableAcM <- cable_ac_longitud if aplica")
+        current_app.logger.info("DOCGEN alias longitudCableAcM <- cable_ac_longitud if aplica")
 
         if ctx.get("longitudCableAcM") is None and ctx.get("cable_ac_longitud") is not None:
             ctx["longitudCableAcM"] = ctx["cable_ac_longitud"]
