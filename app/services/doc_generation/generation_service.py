@@ -180,11 +180,11 @@ class DocGeneratorService:
     # ---- API visible desde tus rutas (mantén la firma) ----
 
     def get_available_docs_for_community(self, community_slug: str) -> List[Dict[str, str]]:
+
+        idx = DocIndex(community_slug)
         if DOCGEN_DEBUG:
             LOGGER.info("DOCGEN list_available: community='%s' base='%s' index='%s' docs=%d",
                         community_slug, idx.base_dir, idx.index_path, len(idx.docs))
-
-        idx = DocIndex(community_slug)
         return idx.list_available()
 
     def prepare_document_context(self, contexto_base: Dict[str, Any], community_province: str, selected_template_filename: str) -> Dict[str, Any]:
