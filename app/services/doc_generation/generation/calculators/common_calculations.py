@@ -71,10 +71,10 @@ def calculate_format_addresses(ctx: Dict[str, Any]) -> Dict[str, Any]:
         calculated_data['instalador_direccion_completa'] = "No especificada"
     
     # Datos de técnico instalador
-    calculated_data['instalador_tecnico_nombre'] = instalador.get('nombre_completo_tecnico', 'Técnico no especificado')
+    calculated_data['instalador_tecnico_nombre'] = instalador.get('nombre_completo_instalador', 'Técnico no especificado')
     calculated_data['instalador_tecnico_dni'] = instalador.get('cif_nif', 'DNI no especificado') # Asumo que es el DNI/CIF de la empresa o técnico
     calculated_data['instalador_tecnico_competencia'] = instalador.get('competencia', '')
-    calculated_data['instalador_cif_empresa'] = instalador.get('cif_nif', '')
+    calculated_data['instalador_cif_empresa'] = instalador.get('cif_nif', 'DNI no especificado')
     calculated_data['instalador_numero_colegiado'] = instalador.get('numero_colegiado_o_instalador', '')
 
     # Hospital Cercano

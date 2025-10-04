@@ -139,6 +139,7 @@ def get_instaladores(conn):
 def get_instalador(conn, instalador_id):
     instalador = instalador_model.get_instalador_by_id(conn, instalador_id, g.user_id)
     if instalador:
+        current_app.logger.info(f"Información sobre instalador ID {instalador_id}. INFO: {instalador}")
         return jsonify(dict(instalador))
     return jsonify({'error': 'Instalador no encontrado o no pertenece a este usuario'}), 404
 
@@ -300,6 +301,9 @@ def generate_docs_api(conn, instalacion_id):
         if nombre_bateria := contexto_base.get('bateria'):
              if bateria_data := catalog_model.get_bateria_by_name(conn, nombre_bateria):
                  contexto_base.update(dict(bateria_data))
+        if nombre_tipo_instalacion := contexto_base.get('tipo_estructura'):
+             if estructura_data := catalog_model.get_bateria_by_name(conn, nombre_tipo_instalacion):
+                 contexto_base.update(dict(estructura_data))
         
         # ===== DEBUG opcional: ver el contexto que sale de BD + catálogo =====
         # Actívalo con DOCGEN_DEBUG=1 (en local o en Render)
@@ -451,6 +455,7 @@ def get_promotor_usage(conn, promotor_id):
 @token_required
 def get_instalador_usage(conn, instalador_id):
     count = instalador_model.get_usage_count(conn, instalador_id, g.user_id)
+    current_app.logger.info(f"Petición para generar docs para Inst ID {instalador_id}. Payload recibido: {count}")
     return jsonify({'usage_count': count})
 
 
