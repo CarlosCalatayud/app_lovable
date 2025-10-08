@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, current_app
 # CTO: Importamos solo la función de conexión.
 from app.database import get_conn, release_conn
 import logging
+from app.database import db_cursor
 
 bp = Blueprint('utility', __name__)
 
@@ -94,3 +95,13 @@ def setup_populate_catalogs_endpoint(secret_key):
     finally:
         if conn: 
             release_conn(conn)
+
+@bp.route("/api/health/db", methods=["GET"])
+def db_health():
+    try:
+        with db_cursor() as cur:
+            cur.execute("select now() as server_time;")
+            row = cur.fetchone()
+        return jsonify({"ok": True, "server_time": row["server_time"]}), 200
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 503
