@@ -229,6 +229,7 @@ class DocGeneratorService:
                 ctx['paneles'] = [synthetic_panel]
 
             # Calcula
+
             struct_calc = calculate_structural_data(ctx)  # {'superficieConstruidaM2', 'densidadDeCarga', 'densidadDeCargaKNm2'}
 
             # Fusión con prioridad controlada por env var
@@ -259,7 +260,9 @@ class DocGeneratorService:
 
         # Densidad de carga si hay datos
         peso = _to_float(ctx.get("pesoEstructuraKg"))
+        current_app.logger.error("DOCGEN ************ pesoEstructuraKg=%s", peso)
         sup = _to_float(ctx.get("superficieConstruidaM2"))
+        current_app.logger.error("DOCGEN ************ superficieConstruidaM2=%s", peso)
         if ctx.get("densidadDeCarga") in (None, "", "0") and peso and sup and sup > 0:
             dens = peso / sup
             ctx["densidadDeCarga"] = f"{dens:.2f}"
